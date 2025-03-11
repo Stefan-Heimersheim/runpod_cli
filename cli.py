@@ -108,7 +108,7 @@ class RunPodManager:
     def create_pod(
         self,
         name: str = "test",
-        image_name: str = "runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04",
+        image_name: str = "ufr308j434f/pytorch-custom:latest",
         gpu_type: str = "NVIDIA A40",
         cloud_type: str = "SECURE",
         gpu_count: int = 1,
@@ -164,7 +164,7 @@ class RunPodManager:
         print("Pod created:")
         print(f"  Instance ID: {pod.get('id')}")
         print(f"  Pod Host ID: {pod.get('machine', {}).get('podHostId')}")
-        print(f"  SSH command: {self.get_ssh_command(pod.get('id'))}")
+        print(f"  SSH command: ssh {pod_host_id}@ssh.runpod.io")
 
     def terminate_pod(self, pod_id: str) -> dict[str, Any]:
         """
