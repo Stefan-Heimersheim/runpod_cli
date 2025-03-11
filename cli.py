@@ -9,13 +9,13 @@ Usage
 The CLI provides several commands to manage RunPod instances:
 
 List all pods:
-    python run_pod_deploy.py list_pods
+    python cli.py list_pods
 
 Get details for a specific pod:
-    python run_pod_deploy.py get_pod --pod_id="YOUR_POD_ID"
+    python cli.py get_pod --pod_id="YOUR_POD_ID"
 
 Create a new pod:
-    python run_pod_deploy.py create_pod --name="my_project" --gpu_type="NVIDIA A40"
+    python cli.py create_pod --name="my_project" --gpu_type="NVIDIA A40"
 
 Additional parameters for create_pod (all optional):
     - image_name: Docker image (default: "runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04")
@@ -29,7 +29,7 @@ Additional parameters for create_pod (all optional):
     - network_volume_id: Network volume ID (default: "fe90u94tti")
 
 Terminate a pod:
-    python run_pod_deploy.py terminate_pod --pod_id="YOUR_POD_ID"
+    python cli.py terminate_pod --pod_id="YOUR_POD_ID"
 
 """
 
