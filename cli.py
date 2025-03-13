@@ -137,10 +137,7 @@ class RunPodManager:
 Host runpod
   HostName {ip}
   User user
-  Port {port}
-  UseKeychain no
-  AddKeysToAgent no
-  ForwardAgent no"""
+  Port {port}"""
 
     def create_pod(
         self,
