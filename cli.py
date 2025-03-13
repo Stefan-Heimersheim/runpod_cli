@@ -162,11 +162,14 @@ class RunPodManager:
         print(f"  Cloud Type: {cloud_type}")
         print(f"  GPU Count: {gpu_count}")
         print(f"  Time limit: {runtime} minutes")
-        print(f"  Docker args: {args}")
 
         middle_arg = args or f"sleep {runtime * 60}"
         # NOTE: Must use this structure in order to work (i.e. with -c and commands separated by ;)
-        args = f"/bin/bash -c '/ssd/start.sh; {middle_arg}; /ssd/terminate.sh'"
+        # We fix `sleep 30` to ensure that this script does not error due to the pod terminating
+        # too quickly
+        args = f"/bin/bash -c '/ssd/start.sh; {middle_arg}; sleep 30; /ssd/terminate.sh'"
+
+        print(f"  Pod start command: {args}")
 
         pod = runpod.create_pod(
             name=name,
@@ -192,22 +195,23 @@ class RunPodManager:
         print("Pod created:")
         print(f"  Instance ID: {pod_id}")
         print(f"  Pod Host ID: {pod_host_id}")
+        print("  Provisioning...")
 
         # Try deploying the pod for 36*5=180 seconds
-        for i in range(36):
+        n_attempts = 36
+        i = 1
+        while True:
             pod = runpod.get_pod(pod_id)
-            if (
-                pod["runtime"] is None
-                or "ports" not in pod["runtime"]
-                or pod["runtime"]["ports"] is None
-            ):
-                if i == 0:
-                    print("  Provisioning...")
-                if i == 35:
+            runtime = pod.get("runtime")
+            if runtime is None or not runtime.get("ports"):
+                if i > n_attempts:
                     raise RuntimeError("Pod provisioning failed")
+                i += 1
                 time.sleep(5)
             else:
                 break
+
+        print("  Pod provisioned")
         public_ip = [i for i in pod["runtime"]["ports"] if i["isIpPublic"]]
         assert len(public_ip) == 1, f"Expected 1 public IP, got {len(public_ip)}"
         ip = public_ip[0].get("ip")
