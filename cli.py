@@ -128,7 +128,7 @@ class RunPodManager:
         gpu_type: str = "NVIDIA A40",
         cloud_type: str = "SECURE",
         gpu_count: int = 1,
-        volume_in_gb: int = 0,
+        volume_in_gb: int = 10,
         min_vcpu_count: int = 1,
         min_memory_in_gb: int = 1,
         args: str = "",
