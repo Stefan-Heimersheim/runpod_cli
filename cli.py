@@ -121,6 +121,27 @@ class RunPodManager:
         print(f"  Public port: {public_ip[0].get('publicPort')}")
         print(f"  Full Data: {pod}")
 
+    def generate_ssh_config(self, ip: str, port: int, user: str) -> None:
+        """
+        Update the ~/.ssh/runpod_config file with the given IP, port, and user.
+
+        Args:
+            ip: IP address of the pod
+            port: Port number of the pod
+            user: User name to use for SSH connection
+
+        Returns:
+            SSH config string
+        """
+        return f"""
+Host runpod
+  HostName {ip}
+  User user
+  Port {port}
+  UseKeychain no
+  AddKeysToAgent no
+  ForwardAgent no"""
+
     def create_pod(
         self,
         name: str = "test",
@@ -135,6 +156,7 @@ class RunPodManager:
         volume_mount_path: str = "/ssd",
         env: dict[str, str] | None = None,
         runtime: int = 120,
+        update_ssh_config: bool = True,
     ) -> None:
         """
         Create a new pod with the specified parameters.
@@ -220,6 +242,10 @@ class RunPodManager:
         print(f"  Public port: {port}")
         print(f"  basic SSH command:\nssh {pod_host_id}@ssh.runpod.io")
         print(f"  full SSH command ('user' depends on the docker image):\nssh user@{ip} -p {port}")
+        if update_ssh_config:
+            runpod_config = self.generate_ssh_config(ip, port, "user")
+            with open(os.path.expanduser("~/.ssh/runpod_config"), "w") as f:
+                f.write(runpod_config)
 
     def terminate_pod(self, pod_id: str) -> None:
         """
