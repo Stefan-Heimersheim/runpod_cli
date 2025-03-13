@@ -23,7 +23,7 @@ The CLI provides several commands to manage RunPod instances including:
 - Creating new pods with customizable parameters
 - Terminating pods
 
-To create a dev pod with 1 A40 GPU that lasts for 1 hour:
+To create a dev pod with 1 A40 GPU that lasts for 1 hour (as opposed to the default 2 hours):
 ```
 python cli.py create_pod --name="mary-pod" --gpu_type="NVIDIA A40" --runtime=60
 ```
