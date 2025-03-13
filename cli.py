@@ -15,7 +15,7 @@ Get details for a specific pod:
     python cli.py get_pod --pod_id="YOUR_POD_ID"
 
 Create a new pod:
-    python cli.py create_pod --name="my_project" --gpu_type="NVIDIA A40"
+    python cli.py create_pod --name="pod" --gpu_type="NVIDIA A40" --network_volume_id="fe90u94tti" --runtime=60
 
 Additional parameters for create_pod (all optional):
     - image_name: Docker image (default: "runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04")
@@ -34,7 +34,7 @@ Terminate a pod:
 """
 
 import os
-from typing import Any
+import time
 
 import fire
 import runpod
@@ -64,7 +64,7 @@ class RunPodManager:
         # Dictionary to store pod host IDs
         self.pod_host_ids: dict[str, str] = {}
 
-    def list_pods(self) -> list[dict[str, Any]]:
+    def list_pods(self) -> None:
         """
         List all pods in the account.
 
@@ -79,11 +79,13 @@ class RunPodManager:
             print(f"  Name: {pod.get('name')}")
             print(f"  Machine Type: {pod.get('machine', {}).get('gpuDisplayName')}")
             print(f"  Status: {pod.get('desiredStatus')}")
+            public_ip = [i for i in pod.get("runtime", {}).get("ports", []) if i["isIpPublic"]]
+            assert len(public_ip) == 1
+            print(f"  Public IP: {public_ip[0].get('ip')}")
+            print(f"  Public port: {public_ip[0].get('publicPort')}")
             print()
 
-        return pods
-
-    def get_pod(self, pod_id: str) -> dict[str, Any]:
+    def get_pod(self, pod_id: str) -> None:
         """
         Get detailed information about a specific pod.
 
@@ -101,9 +103,11 @@ class RunPodManager:
         print(f"  Machine Type: {pod.get('machine', {}).get('gpuDisplayName')}")
         print(f"  Status: {pod.get('desiredStatus')}")
         print(f"  Pod Host ID: {pod.get('machine', {}).get('podHostId')}")
+        public_ip = [i for i in pod.get("runtime", {}).get("ports", []) if i["isIpPublic"]]
+        assert len(public_ip) == 1
+        print(f"  Public IP: {public_ip[0].get('ip')}")
+        print(f"  Public port: {public_ip[0].get('publicPort')}")
         print(f"  Full Data: {pod}")
-
-        return pod
 
     def create_pod(
         self,
@@ -115,9 +119,11 @@ class RunPodManager:
         volume_in_gb: int = 0,
         min_vcpu_count: int = 1,
         min_memory_in_gb: int = 1,
-        docker_args: str = "sleep infinity",
+        docker_args: str = "",
         volume_mount_path: str = "/ssd",
+        env: dict[str, str] | None = None,
         network_volume_id: str = "fe90u94tti",
+        runtime: int = 120,
     ) -> None:
         """
         Create a new pod with the specified parameters.
@@ -131,9 +137,12 @@ class RunPodManager:
             volume_in_gb: Size of ephemeral storage volume in GB
             min_vcpu_count: Minimum vCPU count
             min_memory_in_gb: Minimum RAM in GB
-            docker_args: Arguments passed to Docker
+            docker_args: Appends to the default command of "/bin/bash /ssd/start.sh" to start the
+                container.
             volume_mount_path: Path where volume will be mounted
+            env: Environment variables to set in the container
             network_volume_id: ID of network volume to attach
+            runtime: Time in minutes for pod to run. Default is 120 minutes.
         """
         print("Creating pod with:")
         print(f"  Name: {name}")
@@ -141,6 +150,10 @@ class RunPodManager:
         print(f"  GPU Type: {gpu_type}")
         print(f"  Cloud Type: {cloud_type}")
         print(f"  GPU Count: {gpu_count}")
+        print(f"  Time limit: {runtime} minutes")
+
+        # NOTE: Must use this structure in order to work (i.e. with -c and ; separated commands)
+        docker_args = f"/bin/bash -c '/ssd/start.sh; sleep {runtime * 60}; /ssd/terminate.sh'"
 
         pod = runpod.create_pod(
             name=name,
@@ -152,21 +165,42 @@ class RunPodManager:
             min_vcpu_count=min_vcpu_count,
             min_memory_in_gb=min_memory_in_gb,
             docker_args=docker_args,
+            env=env,
+            ports="8888/http,22/tcp",
             volume_mount_path=volume_mount_path,
             network_volume_id=network_volume_id,
         )
-
+        pod_id = pod.get("id")
         # Store the pod host ID when we create a pod
         pod_host_id = pod.get("machine", {}).get("podHostId")
         if pod_host_id:
-            self.pod_host_ids[pod["id"]] = pod_host_id
+            self.pod_host_ids[pod_id] = pod_host_id
 
         print("Pod created:")
-        print(f"  Instance ID: {pod.get('id')}")
-        print(f"  Pod Host ID: {pod.get('machine', {}).get('podHostId')}")
-        print(f"  SSH command: ssh {pod_host_id}@ssh.runpod.io")
+        print(f"  Instance ID: {pod_id}")
+        print(f"  Pod Host ID: {pod_host_id}")
+        # Run a loop, printing every 5 seconds until public_ip > 0
+        while True:
+            pod = runpod.get_pod(pod_id)
+            if (
+                pod["runtime"] is None
+                or "ports" not in pod["runtime"]
+                or pod["runtime"]["ports"] is None
+            ):
+                print("  Provisioning...")
+                time.sleep(5)
+            else:
+                break
+        public_ip = [i for i in pod["runtime"]["ports"] if i["isIpPublic"]]
+        assert len(public_ip) == 1, f"Expected 1 public IP, got {len(public_ip)}"
+        ip = public_ip[0].get("ip")
+        port = public_ip[0].get("publicPort")
+        print(f"  Public IP: {ip}")
+        print(f"  Public port: {port}")
+        print(f"  basic SSH command:\nssh {pod_host_id}@ssh.runpod.io")
+        print(f"  full SSH command ('user' depends on the docker image):\nssh user@{ip} -p {port}")
 
-    def terminate_pod(self, pod_id: str) -> dict[str, Any]:
+    def terminate_pod(self, pod_id: str) -> None:
         """
         Terminate a specific pod.
 
@@ -177,12 +211,8 @@ class RunPodManager:
             Termination result dictionary
         """
         print(f"Terminating pod {pod_id}...")
-
         result = runpod.terminate_pod(pod_id)
-
         print(f"Pod terminated: {result}")
-
-        return result
 
 
 def main() -> None:
