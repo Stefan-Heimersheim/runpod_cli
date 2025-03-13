@@ -14,8 +14,11 @@ List all pods:
 Get details for a specific pod:
     python cli.py get_pod --pod_id="YOUR_POD_ID"
 
-Create a new pod:
-    python cli.py create_pod --name="pod" --gpu_type="NVIDIA A40" --runtime=60
+Create a dev pod with 1 A40 GPU that lasts for 1 hour:
+    python cli.py create_pod --name="pod-name" --gpu_type="NVIDIA A40" --runtime=60
+
+Run a custom python script `my_script.py` on a pod (and let it terminate after it finishes):
+    python cli.py create_pod --name="pod-name" --gpu_type="NVIDIA A40" --args="python my_script.py"
 
 Parameters for create_pod (all optional):
     - name: Name for the pod
@@ -26,8 +29,9 @@ Parameters for create_pod (all optional):
     - volume_in_gb: Ephemeral storage volume size (default: 0)
     - min_vcpu_count: Minimum CPU count (default: 1)
     - min_memory_in_gb: Minimum RAM in GB (default: 1)
-    - docker_args: Arguments passed to Docker (by default runs ./start.sh and ./terminate.sh with
-        sleep in between)
+    - args: Arguments passed to Docker (by default runs ./start.sh and ./terminate.sh with
+        sleep in between). If provided, will replace the sleep in between with the provided
+        arguments.
     - volume_mount_path: Volume mount path (default: "/ssd")
     - env: Environment variables to set in the container
     - runtime: Time in minutes for pod to run. Default is 120 minutes.
@@ -127,7 +131,7 @@ class RunPodManager:
         volume_in_gb: int = 0,
         min_vcpu_count: int = 1,
         min_memory_in_gb: int = 1,
-        docker_args: str = "",
+        args: str = "",
         volume_mount_path: str = "/ssd",
         env: dict[str, str] | None = None,
         runtime: int = 120,
@@ -144,8 +148,9 @@ class RunPodManager:
             volume_in_gb: Size of ephemeral storage volume in GB
             min_vcpu_count: Minimum vCPU count
             min_memory_in_gb: Minimum RAM in GB
-            docker_args: Appends to the default command of "/bin/bash /ssd/start.sh" to start the
-                container.
+            args: Arguments passed to Docker (by default runs ./start.sh and ./terminate.sh with
+                sleep in between). If provided, will replace the sleep in between with the provided
+                arguments.
             volume_mount_path: Path where volume will be mounted
             env: Environment variables to set in the container
             runtime: Time in minutes for pod to run. Default is 120 minutes.
@@ -157,9 +162,11 @@ class RunPodManager:
         print(f"  Cloud Type: {cloud_type}")
         print(f"  GPU Count: {gpu_count}")
         print(f"  Time limit: {runtime} minutes")
+        print(f"  Docker args: {args}")
 
-        # NOTE: Must use this structure in order to work (i.e. with -c and ; separated commands)
-        docker_args = f"/bin/bash -c '/ssd/start.sh; sleep {runtime * 60}; /ssd/terminate.sh'"
+        middle_arg = args or f"sleep {runtime * 60}"
+        # NOTE: Must use this structure in order to work (i.e. with -c and commands separated by ;)
+        args = f"/bin/bash -c '/ssd/start.sh; {middle_arg}; /ssd/terminate.sh'"
 
         pod = runpod.create_pod(
             name=name,
@@ -170,7 +177,7 @@ class RunPodManager:
             volume_in_gb=volume_in_gb,
             min_vcpu_count=min_vcpu_count,
             min_memory_in_gb=min_memory_in_gb,
-            docker_args=docker_args,
+            docker_args=args,
             env=env,
             ports="8888/http,22/tcp",
             volume_mount_path=volume_mount_path,
@@ -185,15 +192,19 @@ class RunPodManager:
         print("Pod created:")
         print(f"  Instance ID: {pod_id}")
         print(f"  Pod Host ID: {pod_host_id}")
-        # Run a loop, printing every 5 seconds until public_ip > 0
-        while True:
+
+        # Try deploying the pod for 36*5=180 seconds
+        for i in range(36):
             pod = runpod.get_pod(pod_id)
             if (
                 pod["runtime"] is None
                 or "ports" not in pod["runtime"]
                 or pod["runtime"]["ports"] is None
             ):
-                print("  Provisioning...")
+                if i == 0:
+                    print("  Provisioning...")
+                if i == 35:
+                    raise RuntimeError("Pod provisioning failed")
                 time.sleep(5)
             else:
                 break

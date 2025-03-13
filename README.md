@@ -23,9 +23,14 @@ The CLI provides several commands to manage RunPod instances including:
 - Creating new pods with customizable parameters
 - Terminating pods
 
-To create a new pod, use the `create_pod` command. For example:
+To create a dev pod with 1 A40 GPU that lasts for 1 hour:
 ```
 python cli.py create_pod --name="mary-pod" --gpu_type="NVIDIA A40" --runtime=60
+```
+
+To run a custom python script `my_script.py` on a pod (and let it terminate after it finishes):
+```
+python cli.py create_pod --name="mary-pod" --gpu_type="NVIDIA A40" --args="python my_script.py"
 ```
 
 For detailed usage instructions and examples, see the docstring in `cli.py`.
