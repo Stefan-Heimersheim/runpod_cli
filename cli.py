@@ -15,18 +15,22 @@ Get details for a specific pod:
     python cli.py get_pod --pod_id="YOUR_POD_ID"
 
 Create a new pod:
-    python cli.py create_pod --name="pod" --gpu_type="NVIDIA A40" --network_volume_id="fe90u94tti" --runtime=60
+    python cli.py create_pod --name="pod" --gpu_type="NVIDIA A40" --runtime=60
 
-Additional parameters for create_pod (all optional):
-    - image_name: Docker image (default: "runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04")
+Parameters for create_pod (all optional):
+    - name: Name for the pod
+    - image_name: Docker image (default: "ufr308j434f/pytorch-custom:latest")
+    - gpu_type: GPU type (default: "NVIDIA A40")
     - cloud_type: "SECURE" or "COMMUNITY" (default: "SECURE")
     - gpu_count: Number of GPUs (default: 1)
     - volume_in_gb: Ephemeral storage volume size (default: 0)
     - min_vcpu_count: Minimum CPU count (default: 1)
     - min_memory_in_gb: Minimum RAM in GB (default: 1)
-    - docker_args: Arguments passed to Docker (default: "sleep infinity")
+    - docker_args: Arguments passed to Docker (by default runs ./start.sh and ./terminate.sh with
+        sleep in between)
     - volume_mount_path: Volume mount path (default: "/ssd")
-    - network_volume_id: Network volume ID (default: "fe90u94tti")
+    - env: Environment variables to set in the container
+    - runtime: Time in minutes for pod to run. Default is 120 minutes.
 
 Terminate a pod:
     python cli.py terminate_pod --pod_id="YOUR_POD_ID"
@@ -54,8 +58,12 @@ class RunPodManager:
         # Get API key from environment
         self.api_key = os.getenv("RUNPOD_API_KEY")
         if not self.api_key:
+            raise ValueError("RUNPOD_API_KEY not found in environment. Set it in your .env file.")
+
+        self.network_volume_id = os.getenv("RUNPOD_NETWORK_VOLUME_ID")
+        if not self.network_volume_id:
             raise ValueError(
-                "RUNPOD_API_KEY not found in environment. Please set it in your .env file."
+                "RUNPOD_NETWORK_VOLUME_ID not found in environment. Set it in your .env file."
             )
 
         # Set up RunPod client
@@ -122,7 +130,6 @@ class RunPodManager:
         docker_args: str = "",
         volume_mount_path: str = "/ssd",
         env: dict[str, str] | None = None,
-        network_volume_id: str = "fe90u94tti",
         runtime: int = 120,
     ) -> None:
         """
@@ -141,7 +148,6 @@ class RunPodManager:
                 container.
             volume_mount_path: Path where volume will be mounted
             env: Environment variables to set in the container
-            network_volume_id: ID of network volume to attach
             runtime: Time in minutes for pod to run. Default is 120 minutes.
         """
         print("Creating pod with:")
@@ -168,7 +174,7 @@ class RunPodManager:
             env=env,
             ports="8888/http,22/tcp",
             volume_mount_path=volume_mount_path,
-            network_volume_id=network_volume_id,
+            network_volume_id=self.network_volume_id,
         )
         pod_id = pod.get("id")
         # Store the pod host ID when we create a pod
