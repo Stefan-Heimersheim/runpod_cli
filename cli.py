@@ -193,8 +193,9 @@ class RunPodManager:
         # NOTE: Must use this structure in order to work (i.e. with -c and commands separated by ;)
         # We sleep for a minimum of 20 seconds to ensure that this script does not error due to the
         # pod terminating too quickly
+        args = f" {args};" if args else ""
         args = (
-            f"/bin/bash -c '{volume_mount_path}/start.sh; {args}; sleep {max(runtime * 60, 20)}; "
+            f"/bin/bash -c '{volume_mount_path}/start.sh;{args} sleep {max(runtime * 60, 20)}; "
             f"{volume_mount_path}/terminate.sh'"
         )
 
