@@ -190,12 +190,11 @@ class RunPodManager:
         print(f"  GPU Count: {gpu_count}")
         print(f"  Time limit: {runtime} minutes")
 
-        middle_arg = args or f"sleep {runtime * 60}"
         # NOTE: Must use this structure in order to work (i.e. with -c and commands separated by ;)
-        # We fix `sleep 30` to ensure that this script does not error due to the pod terminating
-        # too quickly
+        # We sleep for a minimum of 20 seconds to ensure that this script does not error due to the
+        # pod terminating too quickly
         args = (
-            f"/bin/bash -c '{volume_mount_path}/start.sh; {middle_arg}; sleep 30; "
+            f"/bin/bash -c '{volume_mount_path}/start.sh; {args}; sleep {max(runtime * 60, 20)}; "
             f"{volume_mount_path}/terminate.sh'"
         )
 
