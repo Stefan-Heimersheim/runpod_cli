@@ -58,7 +58,7 @@ class RunPodManager:
         Initialize the RunPod manager.
         """
         # Load environment variables from .env file
-        load_dotenv()
+        load_dotenv(override=True)
 
         # Get API key from environment
         self.api_key = os.getenv("RUNPOD_API_KEY")
