@@ -42,6 +42,7 @@ Terminate a pod:
 """
 
 import os
+import textwrap
 import time
 
 import fire
@@ -121,7 +122,9 @@ class RunPodManager:
         print(f"  Public port: {public_ip[0].get('publicPort')}")
         print(f"  Full Data: {pod}")
 
-    def generate_ssh_config(self, ip: str, port: int, user: str) -> None:
+    def generate_ssh_config(
+        self, ip: str, port: int, user: str, forward_agent: bool = False
+    ) -> str:
         """
         Update the ~/.ssh/runpod_config file with the given IP, port, and user.
 
@@ -129,15 +132,17 @@ class RunPodManager:
             ip: IP address of the pod
             port: Port number of the pod
             user: User name to use for SSH connection
-
+            forward_agent: Whether to forward the agent
         Returns:
             SSH config string
         """
-        return f"""
-Host runpod
-  HostName {ip}
-  User user
-  Port {port}"""
+        return textwrap.dedent(f"""
+            Host runpod
+              HostName {ip}
+              User user
+              Port {port}
+              {"ForwardAgent yes" if forward_agent else ""}
+        """).strip()
 
     def create_pod(
         self,
@@ -154,6 +159,7 @@ Host runpod
         env: dict[str, str] | None = None,
         runtime: int = 120,
         update_ssh_config: bool = True,
+        forward_agent: bool = False,
     ) -> None:
         """
         Create a new pod with the specified parameters.
@@ -173,6 +179,8 @@ Host runpod
             volume_mount_path: Path where volume will be mounted
             env: Environment variables to set in the container
             runtime: Time in minutes for pod to run. Default is 120 minutes.
+            update_ssh_config: Whether to update the ~/.ssh/runpod_config file
+            forward_agent: Whether to forward the agent
         """
         print("Creating pod with:")
         print(f"  Name: {name}")
@@ -243,9 +251,12 @@ Host runpod
         print(f"  basic SSH command:\nssh {pod_host_id}@ssh.runpod.io")
         print(f"  full SSH command ('user' depends on the docker image):\nssh user@{ip} -p {port}")
         if update_ssh_config:
-            runpod_config = self.generate_ssh_config(ip, port, "user")
+            runpod_config = self.generate_ssh_config(
+                ip=ip, port=port, user="user", forward_agent=forward_agent
+            )
             with open(os.path.expanduser("~/.ssh/runpod_config"), "w") as f:
                 f.write(runpod_config)
+            print("SSH config updated")
 
     def terminate_pod(self, pod_id: str) -> None:
         """
