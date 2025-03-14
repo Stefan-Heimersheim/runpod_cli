@@ -82,6 +82,57 @@ start_jupyter() {
     fi
 }
 
+# Add prompt customization to bashrc
+setup_custom_prompt() {
+    echo "Setting up custom prompt..."
+    cat << 'EOF' > ~/.custom_prompt
+# Custom prompt
+parse_git_branch() {
+     git branch 2> /dev/null | sed -e '/^[^*]/d' -e 's/* \(.*\)/ (\1)/'
+}
+
+set_prompt() {
+    local exit_code=$?
+    local env_display=""
+    
+    # Check for Python virtual environment first
+    if [ -n "$VIRTUAL_ENV" ]; then
+        # Extract environment name from VIRTUAL_ENV path
+        env_display="($(basename "$VIRTUAL_ENV"))"
+    else
+        # Fall back to conda environment check
+        env_display="$(conda env list 2>/dev/null | grep '*' | awk '{print $1}' | sed 's/^/(/' | sed 's/$/)/g')"
+    fi
+    
+    PS1="${env_display} \[\033[01;34m\]\w\[\033[00m\]\$(parse_git_branch) \$ "
+    return $exit_code
+}
+
+PROMPT_COMMAND=set_prompt
+
+if command -v fzf-share >/dev/null; then
+  source "$(fzf-share)/key-bindings.bash"
+  source "$(fzf-share)/completion.bash"
+fi
+
+# Function to attach to tmux session
+tmux_attach() {
+    tmux a -t "$1"
+}
+
+# Function to kill tmux session
+tmux_kill() {
+    tmux kill-session -t "$1"
+}
+
+# Create aliases for tmux attach and kill
+for i in {0..9}; do
+    alias "t$i"="tmux_attach $i"
+    alias "kt$i"="tmux_kill $i"
+done
+EOF
+    echo 'source ~/.custom_prompt' >> ~/.bashrc
+}
 # ---------------------------------------------------------------------------- #
 #                               Main Program                                   #
 # ---------------------------------------------------------------------------- #
@@ -96,6 +147,9 @@ setup_ssh
 # start_jupyter
 export_env_vars
 
+setup_custom_prompt
+
 # execute_script "/post_start.sh" "Running post-start script..."
 
 echo "Start script(s) finished, pod is ready to use."
+
