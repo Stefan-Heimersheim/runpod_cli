@@ -154,6 +154,7 @@ class RunPodManager:
         volume_in_gb: int = 10,
         min_vcpu_count: int = 1,
         min_memory_in_gb: int = 1,
+        container_disk_in_gb: int = 30,
         args: str = "",
         volume_mount_path: str = "/ssd",
         env: dict[str, str] | None = None,
@@ -173,6 +174,7 @@ class RunPodManager:
             volume_in_gb: Size of ephemeral storage volume in GB
             min_vcpu_count: Minimum vCPU count
             min_memory_in_gb: Minimum RAM in GB
+            container_disk_in_gb: Size of container disk in GB
             args: Arguments passed to Docker (by default runs ./start.sh and ./terminate.sh with
                 sleep in between). If provided, will replace the sleep in between with the provided
                 arguments.
@@ -208,6 +210,7 @@ class RunPodManager:
             cloud_type=cloud_type,
             gpu_count=gpu_count,
             volume_in_gb=volume_in_gb,
+            container_disk_in_gb=container_disk_in_gb,
             min_vcpu_count=min_vcpu_count,
             min_memory_in_gb=min_memory_in_gb,
             docker_args=args,
