@@ -139,7 +139,7 @@ class RunPodManager:
         return textwrap.dedent(f"""
             Host runpod
               HostName {ip}
-              User user
+              User {user}
               Port {port}
               {"ForwardAgent yes" if forward_agent else ""}
         """).strip()
@@ -147,7 +147,7 @@ class RunPodManager:
     def create_pod(
         self,
         name: str = "test",
-        image_name: str = "ufr308j434f/pytorch-custom:latest",
+        image_name: str = "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04",
         gpu_type: str = "NVIDIA A40",
         cloud_type: str = "SECURE",
         gpu_count: int = 1,
@@ -252,10 +252,13 @@ class RunPodManager:
         print(f"  Public IP: {ip}")
         print(f"  Public port: {port}")
         print(f"  basic SSH command:\nssh {pod_host_id}@ssh.runpod.io")
-        print(f"  full SSH command ('user' depends on the docker image):\nssh user@{ip} -p {port}")
+        print(f"  full SSH command:\nssh root@{ip} -p {port}")
         if update_ssh_config:
             runpod_config = self.generate_ssh_config(
-                ip=ip, port=port, user="user", forward_agent=forward_agent
+                ip=ip,
+                port=port,
+                user="root",
+                forward_agent=forward_agent,
             )
             with open(os.path.expanduser("~/.ssh/runpod_config"), "w") as f:
                 f.write(runpod_config)
