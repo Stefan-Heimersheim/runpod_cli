@@ -1,49 +1,55 @@
 """
 RunPod Management CLI
+=====================
 
-A command-line tool for managing RunPod instances using the RunPod API.
-Features include listing, creating, and terminating pods with customizable parameters.
+A lightweight command-line wrapper around the RunPod API for creating,
+inspecting, and terminating GPU pods.
 
-Usage
------
-The CLI provides several commands to manage RunPod instances:
-
-List all pods:
+Quick start
+-----------
+List all pods
     python cli.py list_pods
 
-Get details for a specific pod:
-    python cli.py get_pod --pod_id="YOUR_POD_ID"
+Inspect a specific pod
+    python cli.py get_pod --pod_id <POD_ID>
 
-Create a dev pod with 1 A40 GPU that lasts for 1 hour:
-    python cli.py create_pod --name="pod-name" --gpu_type="NVIDIA A40" --runtime=60
+Spin up a 1×A40 dev pod for one hour
+    python cli.py create_pod --name my-pod --gpu_type "NVIDIA A40" --network_volume_id "t3uq90cdfb" --runtime 60
 
-Run a custom python script `my_script.py` on a pod (and let it terminate after it finishes):
-    python cli.py create_pod --name="pod-name" --gpu_type="NVIDIA A40" --args="python my_script.py"
+Run an arbitrary command (here: a W&B agent) and let the pod self-terminate
+afterwards
+    python cli.py create_pod --name spd-agent --gpu_type "NVIDIA A100-SXM4-80GB" --args "python my_script.py"
 
-Parameters for create_pod (all optional):
-    - name: Name for the pod
-    - image_name: Docker image (default: "ufr308j434f/pytorch-custom:latest")
-    - gpu_type: GPU type (default: "NVIDIA A40")
-    - cloud_type: "SECURE" or "COMMUNITY" (default: "SECURE")
-    - gpu_count: Number of GPUs (default: 1)
-    - volume_in_gb: Ephemeral storage volume size (default: 0)
-    - min_vcpu_count: Minimum CPU count (default: 1)
-    - min_memory_in_gb: Minimum RAM in GB (default: 1)
-    - args: Arguments passed to Docker (by default runs ./start.sh and ./terminate.sh with
-        sleep in between). If provided, will replace the sleep in between with the provided
-        arguments.
-    - volume_mount_path: Volume mount path (default: "/ssd")
-    - env: Environment variables to set in the container
-    - runtime: Time in minutes for pod to run. Default is 120 minutes.
+Key ``create_pod`` flags
+------------------------
+name                 Human-readable pod name (default: "test")
+image_name           Docker image (default:
+                     "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04")
+gpu_type             GPU model (default: "NVIDIA A40")
+cloud_type           "SECURE" or "COMMUNITY" (default: "SECURE")
+gpu_count            Number of GPUs (default: 1)
+volume_in_gb         Ephemeral storage size in GB (default: 10)
+container_disk_in_gb Persistent container disk size in GB (default: 30)
+min_vcpu_count       Minimum CPU cores (default: 1)
+min_memory_in_gb     Minimum RAM in GB (default: 1)
+args                 Command(s) executed inside the container.
+                     If omitted, the pod runs ``start.sh`` → sleeps → ``terminate.sh``.
+volume_mount_path    Mount point of the network volume (default: "/ssd")
+network_volume_id    RunPod network-volume ID (default: "t3uq90cdfb")
+runtime              Max run-time in minutes; ``0`` disables auto-termination
+                     (default: 120)
+update_ssh_config    Write an entry to ``~/.ssh/runpod_config`` (default: True)
+forward_agent        Enable SSH agent forwarding (default: False)
 
-Terminate a pod:
-    python cli.py terminate_pod --pod_id="YOUR_POD_ID"
-
+Terminate a pod
+---------------
+    python cli.py terminate_pod --pod_id <POD_ID>
 """
 
 import os
 import textwrap
 import time
+from pathlib import Path
 
 import fire
 import runpod
@@ -64,12 +70,6 @@ class RunPodManager:
         self.api_key = os.getenv("RUNPOD_API_KEY")
         if not self.api_key:
             raise ValueError("RUNPOD_API_KEY not found in environment. Set it in your .env file.")
-
-        self.network_volume_id = os.getenv("RUNPOD_NETWORK_VOLUME_ID")
-        if not self.network_volume_id:
-            raise ValueError(
-                "RUNPOD_NETWORK_VOLUME_ID not found in environment. Set it in your .env file."
-            )
 
         # Set up RunPod client
         runpod.api_key = self.api_key
@@ -161,6 +161,7 @@ class RunPodManager:
         runtime: int = 120,
         update_ssh_config: bool = True,
         forward_agent: bool = False,
+        network_volume_id: str = "t3uq90cdfb",
     ) -> None:
         """
         Create a new pod with the specified parameters.
@@ -183,6 +184,7 @@ class RunPodManager:
             runtime: Time in minutes for pod to run. Default is 120 minutes.
             update_ssh_config: Whether to update the ~/.ssh/runpod_config file
             forward_agent: Whether to forward the agent
+            network_volume_id: RunPod network-volume ID (default `"t3uq90cdfb"`)
         """
         print("Creating pod with:")
         print(f"  Name: {name}")
@@ -191,6 +193,7 @@ class RunPodManager:
         print(f"  Cloud Type: {cloud_type}")
         print(f"  GPU Count: {gpu_count}")
         print(f"  Time limit: {runtime} minutes")
+        print(f"  Network volume ID: {network_volume_id}")
 
         # NOTE: Must use this structure in order to work (i.e. with -c and commands separated by ;)
         # We sleep for a minimum of 20 seconds to ensure that this script does not error due to the
@@ -217,7 +220,7 @@ class RunPodManager:
             env=env,
             ports="8888/http,22/tcp",
             volume_mount_path=volume_mount_path,
-            network_volume_id=self.network_volume_id,
+            network_volume_id=network_volume_id,
         )
         pod_id = pod.get("id")
         # Store the pod host ID when we create a pod
@@ -260,8 +263,7 @@ class RunPodManager:
                 user="root",
                 forward_agent=forward_agent,
             )
-            with open(os.path.expanduser("~/.ssh/runpod_config"), "w") as f:
-                f.write(runpod_config)
+            Path.home().joinpath(".ssh", "runpod_config").write_text(runpod_config)
             print("SSH config updated")
 
     def terminate_pod(self, pod_id: str) -> None:
