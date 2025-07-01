@@ -19,6 +19,8 @@ A command-line tool for managing RunPod instances via the RunPod API.
    ```
    You can do this by deploying a pod from the RunPod web UI with the volume attached.
 
+**Security note:** Your Runpod API key will be stored on the pod (`/root/.runpod.env`) and is accessible to anyone that can log in to your pod. This includes team members whose SSH keys are added to your Runpod team accoun [settings](https://console.runpod.io/user/settings).
+
 ## Usage
 
 The CLI offers the following high-level commands:
