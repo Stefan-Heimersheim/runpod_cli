@@ -2,7 +2,7 @@
 
 A command-line tool for managing RunPod instances via the RunPod API, based on 
 [ApolloResearch/runpod_cli](https://github.com/ApolloResearch/runpod_cli). This
-version includes some opinionated changes, including:
+version makes some larger changes:
 - Uses RunPod's S3 API instead of manually copying files to the network volume
 - Installs a list of selected Python packages to the pod on startup (with `--system`)
   - Intended use-case: Create environments with `uv venv --python 3.11 --system-site-packages`
@@ -52,9 +52,9 @@ These changes rely on [RunPod's S3 API](https://docs.runpod.io/serverless/storag
 
 1. Create a RunPod [network-volume](https://docs.runpod.io/pods/storage/create-network-volumes). Choose a region from the S3-supported regions; pick one that has availability for your preferred GPU types.
 
-2. [Optional but recommended] Add the following line to your `~/.ssh/config`:
-```
-Include ~/.ssh/config.runpod_cli
+2. [Optional but recommended] Add `~/.ssh/config.runpod_cli` to your `~/.ssh/config`:
+```bash
+echo "Include ~/.ssh/config.runpod_cli" >> ~/.ssh/config
 ```
 
 2. Copy `.env.example` to `~/.config/runpod_cli/.env` and add your RunPod credentials:
@@ -101,5 +101,4 @@ ERROR  | Uncaught exception | <class 'TypeError'>; Inspector.__init__() missing 
 - Allow for persistent bash history
 - Set UV_LINK_MODE=copy or move the uv cache
 - Find a better way to wait for ssh keys to be generated than `time.sleep(5)`
-- Turn into a package usable from the cmdline, with a config file in $XDG_CONFIG_HOME/runpod_cli/config.yaml$
 - Allow user to configre an SSH_PUBLIC_KEY_PATH in .env
