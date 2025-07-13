@@ -147,7 +147,7 @@ class RunPodClient:
 
     def get_pods(self) -> list[dict]:
         """Get all pods from RunPod."""
-        return runpod.get_pods()
+        return runpod.get_pods()  # type: ignore
 
     def get_pod(self, pod_id: str) -> dict:
         """Get a specific pod by ID."""
@@ -234,7 +234,7 @@ class RunPodClient:
             network_volume_id=self.network_volume_id,
         )
 
-        pod_id = pod.get("id")
+        pod_id: str = pod.get("id")  # type: ignore
         pod = self._provision_and_wait(pod_id)
 
         return pod
