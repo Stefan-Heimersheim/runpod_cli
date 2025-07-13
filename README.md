@@ -32,6 +32,7 @@ These changes rely on [RunPod's S3 API](https://docs.runpod.io/serverless/storag
 1. Clone this repository
 2. Install as a UV tool:
    ```bash
+   cd runpod_cli
    uv tool install -e .
    ```
 3. Ensure UV's bin directory is on your PATH:
@@ -45,6 +46,7 @@ These changes rely on [RunPod's S3 API](https://docs.runpod.io/serverless/storag
 1. Clone this repository
 2. Install dependencies:
    ```bash
+   cd runpod_cli
    pip install -r requirements.txt
    ```
 
