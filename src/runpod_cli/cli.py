@@ -3,7 +3,7 @@ import os
 import textwrap
 import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Dict, List, Optional, Tuple
 
 import boto3
 import fire
@@ -50,7 +50,7 @@ class PodSpec:
     min_memory_in_gb: int = 1
     container_disk_in_gb: int = 30
     volume_mount_path: str = "/network"
-    env: Optional[dict[str, str]] = None
+    env: Optional[Dict[str, str]] = None
     update_ssh_config: bool = True
     forward_agent: bool = False
     update_known_hosts: bool = True
@@ -104,13 +104,13 @@ class RunPodClient:
             region_name=self.region,
         )
 
-    def get_pods(self) -> list[dict]:
+    def get_pods(self) -> List[Dict]:
         return runpod.get_pods()  # type: ignore
 
-    def get_pod(self, pod_id: str) -> dict:
+    def get_pod(self, pod_id: str) -> Dict:
         return runpod.get_pod(pod_id)
 
-    def terminate_pod(self, pod_id: str) -> dict | None:
+    def terminate_pod(self, pod_id: str) -> Optional[Dict]:
         return runpod.terminate_pod(pod_id)
 
     def upload_script_content(self, content: str, target: str) -> None:
@@ -126,7 +126,7 @@ class RunPodClient:
         runpodcli_path = f"{volume_mount_path}/runpodcli"
         return "/bin/bash -c '" + (f"mkdir -p {runpodcli_path}; bash {runpodcli_path}/start.sh; sleep {max(runtime * 60, 20)}; bash {runpodcli_path}/terminate.sh") + "'"
 
-    def _provision_and_wait(self, pod_id: str, n_attempts: int = 60) -> dict:
+    def _provision_and_wait(self, pod_id: str, n_attempts: int = 60) -> Dict:
         for i in range(n_attempts):
             pod = runpod.get_pod(pod_id)
             pod_runtime = pod.get("runtime")
@@ -136,7 +136,7 @@ class RunPodClient:
                 return pod
         raise RuntimeError("Pod provisioning failed")
 
-    def create_pod(self, name: str | None, spec: PodSpec, runtime: int) -> dict:
+    def create_pod(self, name: Optional[str], spec: PodSpec, runtime: int) -> Dict:
         gpu_id = GPU_DISPLAY_NAME_TO_ID[spec.gpu_type] if spec.gpu_type in GPU_DISPLAY_NAME_TO_ID else spec.gpu_type
 
         # Get scripts and upload to network volume
@@ -177,7 +177,7 @@ class RunPodClient:
 
         return pod
 
-    def get_pod_public_ip_and_port(self, pod: dict) -> tuple[str, int]:
+    def get_pod_public_ip_and_port(self, pod: Dict) -> Tuple[str, int]:
         """Extract public IP and port from pod runtime info."""
         public_ips = [i for i in pod["runtime"]["ports"] if i["isIpPublic"]]
         if len(public_ips) != 1:
@@ -186,7 +186,7 @@ class RunPodClient:
         port = public_ips[0].get("publicPort")
         return ip, port
 
-    def get_host_keys(self, remote_path: str) -> list[tuple[str, str]]:
+    def get_host_keys(self, remote_path: str) -> List[Tuple[str, str]]:
         """Download host keys from S3 and return list of (algorithm, key) pairs."""
         host_keys = []
         for file in ["ssh_ed25519_host_key", "ssh_ecdsa_host_key", "ssh_rsa_host_key", "ssh_dsa_host_key"]:
@@ -239,22 +239,22 @@ class RunPodManager:
 
     def create(
         self,
-        name: str | None = None,
+        name: Optional[str] = None,
         runtime: int = 60,
         spec: Optional[PodSpec] = None,
-        gpu_type: str | None = None,
-        image_name: str | None = None,
-        cloud_type: str | None = None,
-        gpu_count: int | None = None,
-        volume_in_gb: int | None = None,
-        min_vcpu_count: int | None = None,
-        min_memory_in_gb: int | None = None,
-        container_disk_in_gb: int | None = None,
-        volume_mount_path: str | None = None,
-        env: Optional[dict[str, str]] = None,
-        update_ssh_config: bool | None = None,
-        forward_agent: bool | None = None,
-        update_known_hosts: bool | None = None,
+        gpu_type: Optional[str] = None,
+        image_name: Optional[str] = None,
+        cloud_type: Optional[str] = None,
+        gpu_count: Optional[int] = None,
+        volume_in_gb: Optional[int] = None,
+        min_vcpu_count: Optional[int] = None,
+        min_memory_in_gb: Optional[int] = None,
+        container_disk_in_gb: Optional[int] = None,
+        volume_mount_path: Optional[str] = None,
+        env: Optional[Dict[str, str]] = None,
+        update_ssh_config: Optional[bool] = None,
+        forward_agent: Optional[bool] = None,
+        update_known_hosts: Optional[bool] = None,
     ) -> None:
         """Create a new RunPod instance with the specified parameters.
 

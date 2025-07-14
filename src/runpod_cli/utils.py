@@ -1,4 +1,5 @@
 import textwrap
+from typing import Tuple
 
 # Default Docker image for pods
 DEFAULT_IMAGE_NAME = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04"
@@ -47,7 +48,7 @@ GPU_ID_TO_DISPLAY_NAME = {v: k for k, v in GPU_DISPLAY_NAME_TO_ID.items()}
 
 
 # Shell scripts to load onto the pod
-def get_setup_root(runpodcli_path: str, volume_mount_path: str):
+def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, str]:
     return "setup_root.sh", textwrap.dedent(
         r"""
         #!/bin/bash
@@ -79,7 +80,7 @@ def get_setup_root(runpodcli_path: str, volume_mount_path: str):
     )
 
 
-def get_setup_user(runpodcli_path: str, git_email: str, git_name: str):
+def get_setup_user(runpodcli_path: str, git_email: str, git_name: str) -> Tuple[str, str]:
     return "setup_user.sh", textwrap.dedent(
         r"""
         #!/bin/bash
@@ -126,7 +127,7 @@ def get_setup_user(runpodcli_path: str, git_email: str, git_name: str):
     )
 
 
-def get_start(runpodcli_path: str):
+def get_start(runpodcli_path: str) -> Tuple[str, str]:
     return "start.sh", textwrap.dedent(
         r"""
         #!/bin/bash
@@ -197,7 +198,7 @@ def get_start(runpodcli_path: str):
     )
 
 
-def get_terminate(runpodcli_path: str):
+def get_terminate(runpodcli_path: str) -> Tuple[str, str]:
     # Note: Could also use `runpodctl remove pod $RUNPOD_POD_ID`
     # but I don't like the dependency on runpodctl
     return "terminate.sh", textwrap.dedent(
