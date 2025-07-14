@@ -73,14 +73,14 @@ cp .env.example ~/.config/runpod_cli/.env
    - [Optional] **GIT_NAME and GIT_EMAIL**: Setting global git config on pod startup
 
 ## Usage
-* `rpc create` - Create a new pod with specified parameters
+* `rpc create` - Create a new pod (default: 1 hour runtime, 1 A4000 GPU)
 * `rpc list` - List all pods in your account
 * `rpc terminate` - Terminate a specific pod
 
 Instead of the `rpc` command, you can also use `python -m runpod_cli` to run the CLI.
 
 ### Command Examples
-Create a dev pod with one A4000 GPU for 1 hour:
+Create a dev pod with one A4000 GPU for 1 hour (these are also the default values):
 
 ```bash
 rpc create --gpu_type "RTX A4000" --runtime 60
@@ -105,3 +105,4 @@ ERROR  | Uncaught exception | <class 'TypeError'>; Inspector.__init__() missing 
 - Find a better way to wait for ssh keys to be generated than `time.sleep(5)`
 - Allow user to configre an SSH_PUBLIC_KEY_PATH in .env
 - Find a way for users to share a network volume with other users by making the `/network/runpodcli` directory user-specific
+- Pre-install VS Code / Cursor server
