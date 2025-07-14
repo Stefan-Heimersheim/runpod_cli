@@ -54,9 +54,9 @@ These changes rely on [RunPod's S3 API](https://docs.runpod.io/serverless/storag
 
 1. Create a RunPod [network-volume](https://docs.runpod.io/pods/storage/create-network-volumes). Choose a region from the S3-supported regions; pick one that has availability for your preferred GPU types.
 
-2. [Optional but recommended] Add `~/.ssh/config.runpod_cli` to your `~/.ssh/config`:
-```bash
-echo "\nInclude ~/.ssh/config.runpod_cli\n" >> ~/.ssh/config
+2. [Optional but recommended] Add this line to the top of your `~/.ssh/config`:
+```
+Include ~/.ssh/config.runpod_cli
 ```
 
 2. Copy `.env.example` to `~/.config/runpod_cli/.env` and add your RunPod credentials:
