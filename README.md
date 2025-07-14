@@ -56,7 +56,7 @@ These changes rely on [RunPod's S3 API](https://docs.runpod.io/serverless/storag
 
 2. [Optional but recommended] Add `~/.ssh/config.runpod_cli` to your `~/.ssh/config`:
 ```bash
-echo "Include ~/.ssh/config.runpod_cli" >> ~/.ssh/config
+echo "\nInclude ~/.ssh/config.runpod_cli\n" >> ~/.ssh/config
 ```
 
 2. Copy `.env.example` to `~/.config/runpod_cli/.env` and add your RunPod credentials:

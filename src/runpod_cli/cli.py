@@ -341,8 +341,8 @@ class RunPodManager:
               HostName {ip}
               User user
               Port {port}
-              {"ForwardAgent yes" if forward_agent else ""}
               UserKnownHostsFile ~/.ssh/known_hosts ~/.ssh/known_hosts.runpod_cli
+              {"ForwardAgent yes" if forward_agent else ""}
         """).strip()
 
     def _write_ssh_config(self, ip: str, port: int, forward_agent: bool, config_path: str = "~/.ssh/config.runpod_cli") -> None:
