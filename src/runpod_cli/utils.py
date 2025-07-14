@@ -199,8 +199,6 @@ def get_start(runpodcli_path: str) -> Tuple[str, str]:
 
 
 def get_terminate(runpodcli_path: str) -> Tuple[str, str]:
-    # Note: Could also use `runpodctl remove pod $RUNPOD_POD_ID`
-    # but I don't like the dependency on runpodctl
     return "terminate.sh", textwrap.dedent(
         r"""
         #!/bin/bash
@@ -212,6 +210,8 @@ def get_terminate(runpodcli_path: str) -> Tuple[str, str]:
             sudo cp /root/.runpod_env /home/user/.runpod_env
             sudo chown user /home/user/.runpod_env
             source /home/user/.runpod_env
+        else
+            source /root/.runpod_env
         fi
 
         echo "Requesting pod termination..."
