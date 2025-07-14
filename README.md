@@ -5,8 +5,8 @@ A command-line tool for managing RunPod instances via the RunPod API, based on
 version makes some larger changes:
 - Uses RunPod's S3 API instead of manually copying files to the network volume
 - Installs a list of selected Python packages to the pod on startup (with `--system`)
-  - Intended use-case: Create environments with `uv venv --python 3.11 --system-site-packages`
-  - This allows us to use system packages installed on the faster (ephemeral) container disk
+  - Intended use-case: Create environments with `--system-site-packages`.
+  - This allows us use the previously mentioned system packages (installed on the faster (ephemeral) container disk).
 - Quality-of-life improvements:
   - Set selected global git settings (including `user.name` and `user.email` if configured in `.env`)
   - Automatically adds SSH key to known_hosts (obtained via secure https S3 API)
@@ -27,7 +27,7 @@ These changes rely on [RunPod's S3 API](https://docs.runpod.io/serverless/storag
 
 ### Installation
 
-#### Option 1: Install as a UV tool (Recommended)
+#### Option 1: Install as a UV tool (recommended)
 
 1. Clone this repository
 2. Install as a UV tool:
@@ -44,13 +44,23 @@ These changes rely on [RunPod's S3 API](https://docs.runpod.io/serverless/storag
 #### Option 2: Install with pip
 
 1. Clone this repository
-2. Install dependencies:
+2. Install into current Python environment:
+   ```bash
+   cd runpod_cli
+   pip install -e .
+   ```
+
+#### Option 3: Install requirements only (not recommended)
+
+1. Clone this repository
+2. Install dependencies into current Python environment:
    ```bash
    cd runpod_cli
    pip install -r requirements.txt
    ```
+3. In this case you need to use `python src/runpod_cli/cli.py` to run the CLI.
 
-### Environment Configuration
+### API keys
 
 1. Create a RunPod [network-volume](https://docs.runpod.io/pods/storage/create-network-volumes). Choose a region from the S3-supported regions; pick one that has availability for your preferred GPU types.
 
@@ -90,6 +100,32 @@ Create a dev pod with two A100 GPUs for 4 hours (adjust PCIe to SXM if needed):
 ```bash
 rpc create --gpu_type "A100 PCIe" --runtime 240 --gpu_count 2
 ```
+
+## Python environment recommendations
+
+I recommend using [virtualenv](https://virtualenv.pypa.io/en/latest/) (pre-installed on the pod)
+or [python -m venv](https://docs.python.org/3/library/venv.html) (slower) to create a virtual environment.
+```bash
+virtualenv venv  --system-site-packages
+source venv/bin/activate
+```
+or
+```bash
+python -m venv venv --system-site-packages
+source venv/bin/activate
+```
+or
+```bash
+uv venv venv --python 3.11 --system-site-packages
+source venv/bin/activate
+```
+With the pre-installed system packages, commands like `pip install transformer_lens` will finish in seconds.
+
+Note: [uv](https://docs.astral.sh/uv/) handles `--system-site-packages`
+[differently](https://docs.astral.sh/uv/reference/cli/#uv-venv--system-site-packages)
+and `uv pip install` will ignore system packages and reinstall dependencies
+into the environment.
+
 
 ## Known issues
 Python Fire has a known issue (fixed & merged on [GitHub](https://github.com/google/python-fire/pull/588/files) but not released on PyPI yet)

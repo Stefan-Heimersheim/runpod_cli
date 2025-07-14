@@ -118,7 +118,7 @@ def get_setup_user(runpodcli_path: str, git_email: str, git_name: str) -> Tuple[
 
         # Install Python packages using uv
         sudo pip install uv
-        sudo uv pip install ipykernel kaleido nbformat numpy scipy scikit-learn pandas matplotlib seaborn plotly jaxtyping einops tqdm ruff basedpyright umap-learn ipywidgets git+https://github.com/callummcdougall/eindex.git --system
+        sudo uv pip install ipykernel kaleido nbformat numpy scipy scikit-learn pandas matplotlib seaborn plotly jaxtyping einops tqdm ruff basedpyright umap-learn ipywidgets virtualenv git+https://github.com/callummcdougall/eindex.git --system
 
         echo "...user setup completed!"
     """.replace("RUNPODCLI_PATH", runpodcli_path)
