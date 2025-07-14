@@ -65,7 +65,7 @@ mkdir -p ~/.config/runpod_cli
 cp .env.example ~/.config/runpod_cli/.env
 ```
 
-3. Add your RunPod credentials to the `.env` file:
+3. Add your RunPod credentials to the `.env` file. *Note: If you use a RunPod team, the team account needs to create those API keys.*
    - **RUNPOD_API_KEY**: Your RunPod API key
    - **RUNPOD_NETWORK_VOLUME_ID**: Your RunPod network volume ID
    - **RUNPOD_S3_ACCESS_KEY_ID**: S3 access key for your RunPod network volume
@@ -104,3 +104,4 @@ ERROR  | Uncaught exception | <class 'TypeError'>; Inspector.__init__() missing 
 - Set UV_LINK_MODE=copy or move the uv cache
 - Find a better way to wait for ssh keys to be generated than `time.sleep(5)`
 - Allow user to configre an SSH_PUBLIC_KEY_PATH in .env
+- Find a way for users to share a network volume with other users by making the `/network/runpodcli` directory user-specific
