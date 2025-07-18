@@ -22,7 +22,7 @@ try:
     )
 except ImportError:
     # Allow running cli.py directly from the repository
-    from utils import (
+    from utils import (  # type: ignore
         DEFAULT_IMAGE_NAME,
         GPU_DISPLAY_NAME_TO_ID,
         GPU_ID_TO_DISPLAY_NAME,
@@ -207,14 +207,41 @@ class RunPodManager:
         list        List all pods in your account
         terminate   Terminate a specific pod
 
+    Global options:
+        --env       Path to the .env file (optional). If not provided, will search for .env files in default locations.
+
     Examples:
         rpc create --gpu_type="RTX A4000" --runtime=60
         rpc list
         rpc terminate --pod_id=YOUR_POD_ID
+        rpc --env=/path/to/custom.env list
     """
 
-    def __init__(self) -> None:
-        """Initialize the RunPod manager."""
+    def __init__(self, env: Optional[str] = None) -> None:
+        """Initialize the RunPod manager.
+
+        Args:
+            env: Path to the .env file (optional). If not provided, will search for .env files in default locations.
+        """
+        # Load environment variables
+        if env:
+            logging.info(f"Using .env file: {env}")
+            # Use the specified .env file
+            env_path = os.path.expanduser(env)
+            if not os.path.exists(env_path):
+                raise FileNotFoundError(f"Specified .env file not found: {env_path}")
+            load_dotenv(override=True, dotenv_path=env_path)
+        else:
+            # Use default .env file search logic
+            xdg_config_dir = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
+            env_paths = [".env", os.path.join(xdg_config_dir, "runpod_cli/.env")]
+            env_exists = [os.path.exists(os.path.expanduser(path)) for path in env_paths]
+            if not any(env_exists):
+                raise FileNotFoundError(f"No .env file found in {env_paths}")
+            if env_exists.count(True) > 1:
+                raise FileExistsError(f"Multiple .env files found in {env_paths}")
+            load_dotenv(override=True, dotenv_path=os.path.expanduser(env_paths[env_exists.index(True)]))
+
         self._client = RunPodClient()
 
     def list(self) -> None:
@@ -377,20 +404,7 @@ class RunPodManager:
         self._client.terminate_pod(pod_id)
 
 
-def main() -> None:
-    """
-    Main entry point for the CLI application.
-    """
-    # Load environment variables once at startup
-    xdg_config_dir = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
-    env_paths = [".env", os.path.join(xdg_config_dir, "runpod_cli/.env")]
-    env_exists = [os.path.exists(os.path.expanduser(path)) for path in env_paths]
-    if not any(env_exists):
-        raise FileNotFoundError(f"No .env file found in {env_paths}")
-    if env_exists.count(True) > 1:
-        raise FileExistsError(f"Multiple .env files found in {env_paths}")
-    load_dotenv(override=True, dotenv_path=os.path.expanduser(env_paths[env_exists.index(True)]))
-
+def main():
     fire.Fire(RunPodManager)
 
 
