@@ -50,6 +50,7 @@ class PodSpec:
     min_memory_in_gb: int = 1
     container_disk_in_gb: int = 30
     volume_mount_path: str = "/network"
+    runpodcli_dir: Optional[str] = None
     env: Optional[Dict[str, str]] = None
     update_ssh_config: bool = True
     forward_agent: bool = False
@@ -122,8 +123,8 @@ class RunPodClient:
         response = s3.get_object(Bucket=self.network_volume_id, Key=remote_path)
         return response["Body"].read().decode("utf-8")
 
-    def _build_docker_args(self, volume_mount_path: str, runtime: int) -> str:
-        runpodcli_path = f"{volume_mount_path}/runpodcli"
+    def _build_docker_args(self, volume_mount_path: str, runpodcli_dir: str, runtime: int) -> str:
+        runpodcli_path = f"{volume_mount_path}/{runpodcli_dir}"
         return (
             "/bin/bash -c '"
             + (f"mkdir -p {runpodcli_path}; bash {runpodcli_path}/start_pod.sh; sleep {max(runtime * 60, 20)}; bash {runpodcli_path}/terminate_pod.sh")
@@ -143,10 +144,13 @@ class RunPodClient:
     def create_pod(self, name: Optional[str], spec: PodSpec, runtime: int) -> Dict:
         gpu_id = GPU_DISPLAY_NAME_TO_ID[spec.gpu_type] if spec.gpu_type in GPU_DISPLAY_NAME_TO_ID else spec.gpu_type
 
+        name = name or f"{os.getenv('USER')}-{GPU_ID_TO_DISPLAY_NAME[gpu_id]}"
+        spec.runpodcli_dir = spec.runpodcli_dir or f".tmp_{name.replace(' ', '_')}"
+
         # Get scripts and upload to network volume
         git_email = os.getenv("GIT_EMAIL", "")
         git_name = os.getenv("GIT_NAME", "")
-        rpc_path = f"{spec.volume_mount_path}/runpodcli"
+        rpc_path = f"{spec.volume_mount_path}/{spec.runpodcli_dir}"
         scripts = [
             get_setup_root(rpc_path, spec.volume_mount_path),
             get_setup_user(rpc_path, git_email, git_name),
@@ -154,9 +158,9 @@ class RunPodClient:
             get_terminate(rpc_path),
         ]
         for script_name, script_content in scripts:
-            self.upload_script_content(content=script_content, target=f"runpodcli/{script_name}")
+            self.upload_script_content(content=script_content, target=f"{spec.runpodcli_dir}/{script_name}")
 
-        docker_args = self._build_docker_args(volume_mount_path=spec.volume_mount_path, runtime=runtime)
+        docker_args = self._build_docker_args(volume_mount_path=spec.volume_mount_path, runpodcli_dir=spec.runpodcli_dir, runtime=runtime)
         name = name or f"{os.getenv('USER')}-{GPU_ID_TO_DISPLAY_NAME[gpu_id]}"
 
         pod = runpod.create_pod(
@@ -282,6 +286,7 @@ class RunPodManager:
         min_memory_in_gb: Optional[int] = None,
         container_disk_in_gb: Optional[int] = None,
         volume_mount_path: Optional[str] = None,
+        runpodcli_dir: Optional[str] = None,
         env: Optional[Dict[str, str]] = None,
         update_ssh_config: Optional[bool] = None,
         forward_agent: Optional[bool] = None,
@@ -301,6 +306,7 @@ class RunPodManager:
             min_memory_in_gb: Minimum RAM in GB (default: 1)
             container_disk_in_gb: Container disk size in GB (default: 30)
             volume_mount_path: Volume mount path (default: "/network")
+            runpodcli_dir: Directory name for runpodcli scripts (default: ".tmp_$name")
             env: Environment variables to set in the container
             update_ssh_config: Whether to update SSH config (default: True)
             forward_agent: Whether to forward SSH agent (default: False)
@@ -332,6 +338,8 @@ class RunPodManager:
             spec.container_disk_in_gb = container_disk_in_gb
         if volume_mount_path is not None:
             spec.volume_mount_path = volume_mount_path
+        if runpodcli_dir is not None:
+            spec.runpodcli_dir = runpodcli_dir
         if env is not None:
             spec.env = env
         if update_ssh_config is not None:
@@ -350,6 +358,7 @@ class RunPodManager:
         logging.info(f"  GPU Type: {spec.gpu_type}")
         logging.info(f"  Cloud Type: {spec.cloud_type}")
         logging.info(f"  GPU Count: {spec.gpu_count}")
+        logging.info(f"  runpodcli directory: {spec.runpodcli_dir}")
         logging.info(f"  Time limit: {runtime} minutes")
 
         logging.info("Pod created. Provisioning...")
@@ -364,7 +373,9 @@ class RunPodManager:
 
         if spec.update_known_hosts:
             time.sleep(5)
-            self._update_known_hosts_file(ip, port)
+            if spec.runpodcli_dir is None:
+                raise ValueError("runpodcli_dir should be set by this point")
+            self._update_known_hosts_file(ip, port, spec.runpodcli_dir)
 
     def _generate_ssh_config(self, ip: str, port: int, forward_agent: bool = False) -> str:
         return textwrap.dedent(f"""
@@ -382,9 +393,9 @@ class RunPodManager:
             f.write(runpod_config)
         logging.info(f"SSH config at {config_path} updated")
 
-    def _update_known_hosts_file(self, public_ip: str, port: int) -> None:
+    def _update_known_hosts_file(self, public_ip: str, port: int, runpodcli_dir: str) -> None:
         """Update SSH known hosts file with pod host keys."""
-        host_keys = self._client.get_host_keys("runpodcli")
+        host_keys = self._client.get_host_keys(runpodcli_dir)
         known_hosts_path = os.path.expanduser("~/.ssh/known_hosts.runpod_cli")
 
         for alg, key in host_keys:

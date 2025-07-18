@@ -140,5 +140,4 @@ ERROR  | Uncaught exception | <class 'TypeError'>; Inspector.__init__() missing 
 - Set UV_LINK_MODE=copy or move the uv cache
 - Find a better way to wait for ssh keys to be generated than `time.sleep(5)`
 - Allow user to configre an SSH_PUBLIC_KEY_PATH in .env
-- Find a way for users to share a network volume with other users by making the `/network/runpodcli` directory user-specific
 - Pre-install VS Code / Cursor server
