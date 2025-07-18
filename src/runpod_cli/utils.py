@@ -73,7 +73,9 @@ def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, st
         apt-get install -y sudo git vim ssh net-tools htop curl zip unzip tmux rsync libopenmpi-dev iputils-ping make fzf restic ripgrep wget pandoc poppler-utils pigz bzip2 nano
         echo 'user ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
         echo "export HF_HOME=/workspace/hf_home/" >> /home/user/.bashrc
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/user/.bashrc
         chmod a+x RUNPODCLI_PATH/terminate_pod.sh
+        ln -s RUNPODCLI_PATH/terminate_pod.sh /usr/local/bin/terminate_pod
 
         echo "...system setup completed!"
     """.replace("RUNPODCLI_PATH", runpodcli_path).replace("VOLUME_MOUNT_PATH", volume_mount_path)
