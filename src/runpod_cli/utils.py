@@ -73,7 +73,7 @@ def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, st
         apt-get install -y sudo git vim ssh net-tools htop curl zip unzip tmux rsync libopenmpi-dev iputils-ping make fzf restic ripgrep wget pandoc poppler-utils pigz bzip2 nano
         echo 'user ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
         echo "export HF_HOME=/workspace/hf_home/" >> /home/user/.bashrc
-        chmod a+x RUNPODCLI_PATH/terminate.sh
+        chmod a+x RUNPODCLI_PATH/terminate_pod.sh
 
         echo "...system setup completed!"
     """.replace("RUNPODCLI_PATH", runpodcli_path).replace("VOLUME_MOUNT_PATH", volume_mount_path)
@@ -128,13 +128,13 @@ def get_setup_user(runpodcli_path: str, git_email: str, git_name: str) -> Tuple[
 
 
 def get_start(runpodcli_path: str) -> Tuple[str, str]:
-    return "start.sh", textwrap.dedent(
+    return "start_pod.sh", textwrap.dedent(
         r"""
         #!/bin/bash
-        # Adapted from https://github.com/runpod/containers/blob/main/container-template/start.sh
+        # Adapted from https://github.com/runpod/containers/blob/main/container-template/start_pod.sh
 
         exec >> RUNPODCLI_PATH/log.txt 2>&1 # logging
-        echo "=== $(date -Iseconds) start.sh ==="
+        echo "=== $(date -Iseconds) start_pod.sh ==="
         set -e  # exit the script if any line fails
 
         setup_ssh() {
@@ -199,11 +199,11 @@ def get_start(runpodcli_path: str) -> Tuple[str, str]:
 
 
 def get_terminate(runpodcli_path: str) -> Tuple[str, str]:
-    return "terminate.sh", textwrap.dedent(
+    return "terminate_pod.sh", textwrap.dedent(
         r"""
         #!/bin/bash
         exec >> RUNPODCLI_PATH/log.txt | tee -a RUNPODCLI_PATH/log.txt 2>&1 # logging
-        echo "=== $(date -Iseconds) terminate.sh ==="
+        echo "=== $(date -Iseconds) terminate_pod.sh ==="
 
         if [ "$(id -u)" -ne 0 ]; then
             echo "Not running as root, attempting to copy runpod env"

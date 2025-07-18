@@ -124,7 +124,11 @@ class RunPodClient:
 
     def _build_docker_args(self, volume_mount_path: str, runtime: int) -> str:
         runpodcli_path = f"{volume_mount_path}/runpodcli"
-        return "/bin/bash -c '" + (f"mkdir -p {runpodcli_path}; bash {runpodcli_path}/start.sh; sleep {max(runtime * 60, 20)}; bash {runpodcli_path}/terminate.sh") + "'"
+        return (
+            "/bin/bash -c '"
+            + (f"mkdir -p {runpodcli_path}; bash {runpodcli_path}/start_pod.sh; sleep {max(runtime * 60, 20)}; bash {runpodcli_path}/terminate_pod.sh")
+            + "'"
+        )
 
     def _provision_and_wait(self, pod_id: str, n_attempts: int = 60) -> Dict:
         for i in range(n_attempts):
