@@ -4,6 +4,7 @@ A command-line tool for managing RunPod instances via the RunPod API, based on
 [ApolloResearch/runpod_cli](https://github.com/ApolloResearch/runpod_cli). This
 version makes some larger changes:
 - Uses RunPod's S3 API instead of manually copying files to the network volume
+- Uses the official RunPod Docker image instead of a custom one (the RunPod image seems to download faster)
 - Installs a list of selected Python packages to the pod on startup (with `--system`)
   - Intended use-case: Create environments with `--system-site-packages`.
   - This allows us use the previously mentioned system packages (installed on the faster (ephemeral) container disk).
@@ -141,3 +142,4 @@ ERROR  | Uncaught exception | <class 'TypeError'>; Inspector.__init__() missing 
 - Find a better way to wait for ssh keys to be generated than `time.sleep(5)`
 - Allow user to configre an SSH_PUBLIC_KEY_PATH in .env
 - Pre-install VS Code / Cursor server
+- Change names & ssh aliases if a user requests multiple GPUs (e.g. runpod, runpod-1, etc.)
