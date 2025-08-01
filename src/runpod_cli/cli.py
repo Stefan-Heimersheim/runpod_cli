@@ -41,11 +41,9 @@ import runpod  # noqa: E402
 class PodSpec:
     """Specification for RunPod infrastructure parameters."""
 
-    image_name: str = DEFAULT_IMAGE_NAME
     gpu_type: str = "RTX A4000"
-    cloud_type: str = "SECURE"
+    image_name: str = DEFAULT_IMAGE_NAME
     gpu_count: int = 1
-    volume_in_gb: int = 10
     min_vcpu_count: int = 1
     min_memory_in_gb: int = 1
     container_disk_in_gb: int = 30
@@ -167,9 +165,8 @@ class RunPodClient:
             name=name,
             image_name=spec.image_name,
             gpu_type_id=gpu_id,
-            cloud_type=spec.cloud_type,
+            cloud_type="SECURE",
             gpu_count=spec.gpu_count,
-            volume_in_gb=spec.volume_in_gb,
             container_disk_in_gb=spec.container_disk_in_gb,
             min_vcpu_count=spec.min_vcpu_count,
             min_memory_in_gb=spec.min_memory_in_gb,
@@ -276,70 +273,55 @@ class RunPodManager:
         self,
         name: Optional[str] = None,
         runtime: int = 60,
-        spec: Optional[PodSpec] = None,
         gpu_type: Optional[str] = None,
-        image_name: Optional[str] = None,
-        cloud_type: Optional[str] = None,
-        gpu_count: Optional[int] = None,
-        volume_in_gb: Optional[int] = None,
-        min_vcpu_count: Optional[int] = None,
-        min_memory_in_gb: Optional[int] = None,
-        container_disk_in_gb: Optional[int] = None,
-        volume_mount_path: Optional[str] = None,
-        runpodcli_dir: Optional[str] = None,
+        cpus: Optional[int] = None,
+        disk: Optional[int] = None,
         env: Optional[Dict[str, str]] = None,
-        update_ssh_config: Optional[bool] = None,
         forward_agent: Optional[bool] = None,
+        image_name: Optional[str] = None,
+        memory: Optional[int] = None,
+        num_gpus: Optional[int] = None,
         update_known_hosts: Optional[bool] = None,
+        update_ssh_config: Optional[bool] = None,
+        volume_mount_path: Optional[str] = None,
     ) -> None:
         """Create a new RunPod instance with the specified parameters.
 
         Args:
-            name: Name for the pod (default: "$USER-$GPU_TYPE")
             runtime: Time in minutes for pod to run (default: 60)
             gpu_type: GPU type (default: "RTX A4000")
-            image_name: Docker image (default: PyTorch 2.8.0 with CUDA 12.8.1)
-            cloud_type: "SECURE" or "COMMUNITY" (default: "SECURE")
-            gpu_count: Number of GPUs (default: 1)
-            volume_in_gb: Ephemeral storage volume size in GB (default: 10)
-            min_vcpu_count: Minimum CPU count (default: 1)
-            min_memory_in_gb: Minimum RAM in GB (default: 1)
-            container_disk_in_gb: Container disk size in GB (default: 30)
-            volume_mount_path: Volume mount path (default: "/network")
-            runpodcli_dir: Directory name for runpodcli scripts (default: ".tmp_$name")
-            env: Environment variables to set in the container
-            update_ssh_config: Whether to update SSH config (default: True)
+            num_gpus: Number of GPUs (default: 1)
+            name: Name for the pod (default: "$USER-$GPU_TYPE")
+            env: File to load RunPod credentials from (default: .env and ~/.config/runpod_cli/.env)
+            disk: Container disk size in GB (default: 30)
+            cpus: Minimum CPU count (default: 1)
+            memory: Minimum RAM in GB (default: 1)
             forward_agent: Whether to forward SSH agent (default: False)
             update_known_hosts: Whether to update known hosts (default: True)
+            update_ssh_config: Whether to update SSH config (default: True)
+            image_name: Docker image (default: "PyTorch 2.8.0 with CUDA 12.8.1")
 
         Examples:
-            rpc create --gpu_type="A100 PCIe" --runtime=60
-            rpc create --name="my-pod" --gpu_count=2 --runtime=240
+            rpc create -r 60 -g "A100 PCIe"
+            rpc create --runtime=240 --gpu_type="RTX A4000" --num_gpus=2 --name="dual-gpu-pod"
         """
-        if spec is None:
-            spec = PodSpec()
+        spec = PodSpec()
 
         # Override spec with individual parameters if provided
         if gpu_type is not None:
             spec.gpu_type = gpu_type
         if image_name is not None:
             spec.image_name = image_name
-        if cloud_type is not None:
-            spec.cloud_type = cloud_type
-        if gpu_count is not None:
-            spec.gpu_count = gpu_count
-        if volume_in_gb is not None:
-            spec.volume_in_gb = volume_in_gb
-        if min_vcpu_count is not None:
-            spec.min_vcpu_count = min_vcpu_count
-        if min_memory_in_gb is not None:
-            spec.min_memory_in_gb = min_memory_in_gb
-        if container_disk_in_gb is not None:
-            spec.container_disk_in_gb = container_disk_in_gb
+        if num_gpus is not None:
+            spec.gpu_count = num_gpus
+        if cpus is not None:
+            spec.min_vcpu_count = cpus
+        if memory is not None:
+            spec.min_memory_in_gb = memory
+        if disk is not None:
+            spec.container_disk_in_gb = disk
         if volume_mount_path is not None:
             spec.volume_mount_path = volume_mount_path
-        if runpodcli_dir is not None:
-            spec.runpodcli_dir = runpodcli_dir
         if env is not None:
             spec.env = env
         if update_ssh_config is not None:
@@ -356,7 +338,6 @@ class RunPodManager:
         logging.info(f"  Region: {self._client.region}")
         logging.info(f"  S3 endpoint: {self._client.s3_endpoint}")
         logging.info(f"  GPU Type: {spec.gpu_type}")
-        logging.info(f"  Cloud Type: {spec.cloud_type}")
         logging.info(f"  GPU Count: {spec.gpu_count}")
         logging.info(f"  runpodcli directory: {spec.runpodcli_dir}")
         logging.info(f"  Time limit: {runtime} minutes")
