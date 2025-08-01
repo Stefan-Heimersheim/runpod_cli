@@ -92,8 +92,8 @@ def get_setup_user(runpodcli_path: str, git_email: str, git_name: str) -> Tuple[
         echo "Setting up user environment..."
 
         # Git configuration
-        git config --global user.email GIT_EMAIL
-        git config --global user.name GIT_NAME
+        git config --global user.email "GIT_EMAIL"
+        git config --global user.name "GIT_NAME"
         git config --global init.defaultBranch main
 
         # Install Node.js and npm packages
