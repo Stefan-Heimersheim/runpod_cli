@@ -120,13 +120,12 @@ def get_setup_user(runpodcli_path: str, git_email: str, git_name: str) -> Tuple[
 
         # Install Python packages using uv
         sudo pip install uv
-        sudo uv pip install ipykernel kaleido nbformat numpy scipy scikit-learn transformers datasets pandas matplotlib seaborn plotly jaxtyping einops tqdm ruff basedpyright umap-learn ipywidgets virtualenv git+https://github.com/callummcdougall/eindex.git --system
+        sudo uv pip install ipykernel kaleido nbformat numpy scipy scikit-learn transformers datasets torchvision pandas matplotlib seaborn plotly jaxtyping einops tqdm ruff basedpyright umap-learn ipywidgets virtualenv  pytest git+https://github.com/callummcdougall/eindex.git --system
 
         # Create a virtual environment for the user
         uv venv ~/.venv --python 3.11 --system-site-packages
         source ~/.venv/bin/activate
-        pip install transformer_lens
-
+        pip install nnsight transformer_lens
 
         echo "...user setup completed!"
     """.replace("RUNPODCLI_PATH", runpodcli_path)
