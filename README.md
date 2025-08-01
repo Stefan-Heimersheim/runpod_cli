@@ -145,3 +145,4 @@ ERROR  | Uncaught exception | <class 'TypeError'>; Inspector.__init__() missing 
 - Change names & ssh aliases if a user requests multiple GPUs (e.g. runpod, runpod-1, etc.)
 - Create a .config/runpod_cli/config file to change the default values (e.g. GPU type, runtime, etc.)
 - Allow for shorter cmdline arguments (e.g. -g or --gpu instead of --gpu_type)
+- Allow fuzzy matching of GPU types (e.g. "a4000" -> "RTX A4000")
