@@ -4,7 +4,7 @@ import re
 import textwrap
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 import boto3
@@ -270,15 +270,16 @@ class RunPodManager:
         if isinstance(last_status_change, str):
             match = _date_re.search(last_status_change)
             if match:
-                start_dt = datetime.strptime(match.group(1), "%a %b %d %Y %H:%M:%S")
+                start_dt = datetime.strptime(match.group(1), "%a %b %d %Y %H:%M:%S").replace(tzinfo=timezone.utc)
         docker_args = pod.get("dockerArgs", "")
         if isinstance(docker_args, str):
             match = _sleep_re.search(docker_args)
             if match:
                 sleep_secs = int(match.group(1))
         if start_dt is not None and sleep_secs is not None:
+            now_dt = datetime.now(timezone.utc)
             shutdown_dt = start_dt + timedelta(seconds=sleep_secs)
-            remaining = shutdown_dt - datetime.now()
+            remaining = shutdown_dt - now_dt
             remaining_str = f"{remaining.seconds // 3600}h {remaining.seconds % 3600 // 60}m"
             return remaining_str if remaining.total_seconds() > 0 else "Unknown"
         else:
@@ -304,6 +305,9 @@ class RunPodManager:
                 logging.info(f"  GPUs: {pod.get('gpuCount')} x {pod.get('machine', {}).get('gpuDisplayName')}")
                 for key in ["memoryInGb", "vcpuCount", "containerDiskInGb", "volumeMountPath", "costPerHr"]:
                     logging.info(f"  {key}: {pod.get(key)}")
+                # For debugging
+                # for key in pod.keys():
+                #     logging.info(f"  {key}: {pod.get(key)}")
             logging.info("")
 
     def create(
