@@ -1,8 +1,10 @@
 import logging
 import os
+import re
 import textwrap
 import time
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
 import boto3
@@ -249,7 +251,40 @@ class RunPodManager:
 
         self._client = RunPodClient()
 
-    def list(self) -> None:
+    def _parse_public_ip(self, pod: Dict) -> str:
+        """Parse public IP and port from pod runtime info."""
+        public_ips = [i for i in pod["runtime"]["ports"] if i["isIpPublic"]]
+        if len(public_ips) != 1:
+            raise ValueError(f"Expected 1 public IP, got {public_ips}")
+        ip = public_ips[0].get("ip")
+        port = public_ips[0].get("publicPort")
+        return ip, port
+
+    def _parse_time_remaining(self, pod: Dict) -> str:
+        """Parse time remaining before pod shutdown from pod runtime info."""
+        _sleep_re = re.compile(r"\bsleep\s+(\d+)\b")
+        _date_re = re.compile(r":\s*(\w{3}\s+\w{3}\s+\d{2}\s+\d{4}\s+\d{2}:\d{2}:\d{2})\s+GMT")
+        start_dt = None
+        sleep_secs = None
+        last_status_change = pod.get("lastStatusChange", "")
+        if isinstance(last_status_change, str):
+            match = _date_re.search(last_status_change)
+            if match:
+                start_dt = datetime.strptime(match.group(1), "%a %b %d %Y %H:%M:%S")
+        docker_args = pod.get("dockerArgs", "")
+        if isinstance(docker_args, str):
+            match = _sleep_re.search(docker_args)
+            if match:
+                sleep_secs = int(match.group(1))
+        if start_dt is not None and sleep_secs is not None:
+            shutdown_dt = start_dt + timedelta(seconds=sleep_secs)
+            remaining = shutdown_dt - datetime.now()
+            remaining_str = f"{remaining.seconds // 3600}h {remaining.seconds % 3600 // 60}m"
+            return remaining_str if remaining.total_seconds() > 0 else "Unknown"
+        else:
+            return "Unknown"
+
+    def list(self, verbose: bool = False) -> None:
         """List all pods in your RunPod account.
 
         Displays information about each pod including ID, name, GPU type, status, and connection details.
@@ -260,13 +295,15 @@ class RunPodManager:
             logging.info(f"Pod {i + 1}:")
             logging.info(f"  ID: {pod.get('id')}")
             logging.info(f"  Name: {pod.get('name')}")
-            logging.info(f"  Machine Type: {pod.get('machine', {}).get('gpuDisplayName')}")
-            logging.info(f"  Status: {pod.get('desiredStatus')}")
-            public_ip = [i for i in pod.get("runtime", {}).get("ports", []) if i["isIpPublic"]]
-            if len(public_ip) != 1:
-                raise ValueError(f"Expected 1 public IP, got {len(public_ip)}")
-            logging.info(f"  Public IP: {public_ip[0].get('ip')}")
-            logging.info(f"  Public port: {public_ip[0].get('publicPort')}")
+            time_remaining = self._parse_time_remaining(pod)
+            logging.info(f"  Time remaining (est.): {time_remaining}")
+            if verbose:
+                public_ip, public_port = self._parse_public_ip(pod)
+                logging.info(f"  Public IP: {public_ip}")
+                logging.info(f"  Public port: {public_port}")
+                logging.info(f"  GPUs: {pod.get('gpuCount')} x {pod.get('machine', {}).get('gpuDisplayName')}")
+                for key in ["memoryInGb", "vcpuCount", "containerDiskInGb", "volumeMountPath", "costPerHr"]:
+                    logging.info(f"  {key}: {pod.get(key)}")
             logging.info("")
 
     def create(
@@ -339,6 +376,9 @@ class RunPodManager:
         logging.info(f"  S3 endpoint: {self._client.s3_endpoint}")
         logging.info(f"  GPU Type: {spec.gpu_type}")
         logging.info(f"  GPU Count: {spec.gpu_count}")
+        logging.info(f"  Disk: {spec.container_disk_in_gb} GB")
+        logging.info(f"  Min CPU: {spec.min_vcpu_count}")
+        logging.info(f"  Min Memory: {spec.min_memory_in_gb} GB")
         logging.info(f"  runpodcli directory: {spec.runpodcli_dir}")
         logging.info(f"  Time limit: {runtime} minutes")
 
