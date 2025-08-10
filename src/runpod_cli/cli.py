@@ -134,6 +134,8 @@ class RunPodManager:
             raise ValueError(f"Expected 1 public IP, got {public_ips}")
         ip = public_ips[0].get("ip")
         port = public_ips[0].get("publicPort")
+        if not ip or port is None:
+            raise ValueError(f"Expected public IP and port, got {ip} and {port} from {public_ips}")
         return ip, port
 
     def _parse_time_remaining(self, pod: Dict) -> str:
@@ -155,10 +157,32 @@ class RunPodManager:
             now_dt = datetime.now(timezone.utc)
             shutdown_dt = start_dt + timedelta(seconds=sleep_secs)
             remaining = shutdown_dt - now_dt
-            remaining_str = f"{remaining.seconds // 3600}h {remaining.seconds % 3600 // 60}m"
-            return remaining_str if remaining.total_seconds() > 0 else "Unknown"
+            total = int(remaining.total_seconds())
+            remaining_str = f"{total // 3600}h {(total % 3600) // 60}m"
+            return remaining_str if total > 0 else "Unknown"
         else:
             return "Unknown"
+
+    def _get_gpu_id(self, gpu_type: str) -> Tuple[str, str]:
+        if gpu_type in GPU_DISPLAY_NAME_TO_ID:
+            # A name was passed
+            gpu_id = GPU_DISPLAY_NAME_TO_ID[gpu_type]
+            gpu_name = gpu_type
+        elif gpu_type in GPU_ID_TO_DISPLAY_NAME:
+            # An ID was passed
+            gpu_id = gpu_type
+            gpu_name = GPU_ID_TO_DISPLAY_NAME[gpu_id]
+        else:
+            # Attempt fuzzy matching, but only if unique
+            matches = [gpu_id for gpu_name, gpu_id in GPU_DISPLAY_NAME_TO_ID.items() if gpu_type.lower() in gpu_id.lower() or gpu_type.lower() in gpu_name.lower()]
+            if len(matches) == 1:
+                gpu_id = matches[0]
+                gpu_name = GPU_ID_TO_DISPLAY_NAME[gpu_id]
+            elif len(matches) > 1:
+                raise ValueError(f"Ambiguous GPU type: {gpu_type} matches {matches}. Please use a full name or ID from https://docs.runpod.io/references/gpu-types")
+            else:
+                raise ValueError(f"Unknown GPU type: {gpu_type}")
+        return gpu_id, gpu_name
 
     def list(self, verbose: bool = False) -> None:
         """List all pods in your RunPod account.
@@ -217,8 +241,8 @@ class RunPodManager:
             rpc create -r 60 -g "A100 SXM"
             rpc create --gpu_type="RTX A4000" --runtime=480
         """
-        gpu_id = GPU_DISPLAY_NAME_TO_ID[gpu_type] if gpu_type in GPU_DISPLAY_NAME_TO_ID else gpu_type
-        name = name or f"{os.getenv('USER')}-{GPU_ID_TO_DISPLAY_NAME[gpu_id]}"
+        gpu_id, gpu_name = self._get_gpu_id(gpu_type)
+        name = name or f"{os.getenv('USER')}-{gpu_name}"
         runpodcli_dir = f".tmp_{name.replace(' ', '_')}"
 
         logging.info("Creating pod with:")

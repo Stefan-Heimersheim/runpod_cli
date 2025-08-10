@@ -130,7 +130,7 @@ into the environment.
 
 ## Known issues
 Python Fire has a known issue (fixed & merged on [GitHub](https://github.com/google/python-fire/pull/588/files) but not released on PyPI yet)
-with ipython==9.0 which will produce the following error:
+with ipython>=9.0 which will produce the following error:
 ```
 ERROR  | Uncaught exception | <class 'TypeError'>; Inspector.__init__() missing 1 required keyword-only argument: 'theme_name';
 ```
