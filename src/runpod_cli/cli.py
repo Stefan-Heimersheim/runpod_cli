@@ -54,6 +54,13 @@ def get_s3_endpoint_from_volume_id(volume_id: str) -> str:
     return s3_endpoint
 
 
+def getenv(key: str) -> str:
+    value = os.getenv(key)
+    if not value:
+        raise ValueError(f"{key} not found in environment. Set it in your .env file.")
+    return value
+
+
 class RunPodManager:
     """RunPod Management CLI - A command-line tool for managing RunPod instances via the RunPod API.
 
@@ -89,20 +96,10 @@ class RunPodManager:
                 raise FileExistsError(f"Multiple .env files found in {env_paths}")
             load_dotenv(override=True, dotenv_path=os.path.expanduser(env_paths[env_exists.index(True)]))
 
-        api_key = os.getenv("RUNPOD_API_KEY")
-        if not api_key:
-            raise ValueError("RUNPOD_API_KEY not found in environment. Set it in your .env file.")
-        runpod.api_key = api_key
-
-        network_volume_id = os.getenv("RUNPOD_NETWORK_VOLUME_ID")
-        if not network_volume_id:
-            raise ValueError("RUNPOD_NETWORK_VOLUME_ID not found in environment. Set it in your .env file.")
-        self.network_volume_id: str = network_volume_id
-
-        s3_access_key_id = os.getenv("RUNPOD_S3_ACCESS_KEY_ID")
-        s3_secret_key = os.getenv("RUNPOD_S3_SECRET_KEY")
-        if not s3_access_key_id or not s3_secret_key:
-            raise ValueError("RUNPOD_S3_ACCESS_KEY_ID or RUNPOD_S3_SECRET_KEY not found in environment. Set it in your .env file.")
+        runpod.api_key = getenv("RUNPOD_API_KEY")
+        self.network_volume_id: str = getenv("RUNPOD_NETWORK_VOLUME_ID")
+        s3_access_key_id = getenv("RUNPOD_S3_ACCESS_KEY_ID")
+        s3_secret_key = getenv("RUNPOD_S3_SECRET_KEY")
         self.region = get_region_from_volume_id(self.network_volume_id)
         self.s3_endpoint = get_s3_endpoint_from_volume_id(self.network_volume_id)
         self._s3 = boto3.client(
