@@ -23,7 +23,6 @@ try:
         get_terminate,
     )
 except ImportError:
-    # Allow running cli.py directly from the repository
     from utils import (  # type: ignore
         DEFAULT_IMAGE_NAME,
         GPU_DISPLAY_NAME_TO_ID,
@@ -41,8 +40,6 @@ import runpod  # noqa: E402
 
 @dataclass
 class PodSpec:
-    """Specification for RunPod infrastructure parameters."""
-
     gpu_type: str = "RTX A4000"
     image_name: str = DEFAULT_IMAGE_NAME
     gpu_count: int = 1
@@ -74,138 +71,6 @@ def get_s3_endpoint_from_volume_id(volume_id: str) -> str:
     return s3_endpoint
 
 
-class RunPodClient:
-    """Pure logic client for RunPod and S3 operations without user I/O."""
-
-    def __init__(self) -> None:
-        self.api_key = os.getenv("RUNPOD_API_KEY")
-        if not self.api_key:
-            raise ValueError("RUNPOD_API_KEY not found in environment. Set it in your .env file.")
-
-        network_volume_id = os.getenv("RUNPOD_NETWORK_VOLUME_ID")
-        if not network_volume_id:
-            raise ValueError("RUNPOD_NETWORK_VOLUME_ID not found in environment. Set it in your .env file.")
-        self.network_volume_id: str = network_volume_id
-
-        self.s3_access_key_id = os.getenv("RUNPOD_S3_ACCESS_KEY_ID")
-        self.s3_secret_key = os.getenv("RUNPOD_S3_SECRET_KEY")
-        if not self.s3_access_key_id or not self.s3_secret_key:
-            raise ValueError("RUNPOD_S3_ACCESS_KEY_ID or RUNPOD_S3_SECRET_KEY not found in environment. Set it in your .env file.")
-
-        runpod.api_key = self.api_key
-        self.region = get_region_from_volume_id(self.network_volume_id)
-        self.s3_endpoint = get_s3_endpoint_from_volume_id(self.network_volume_id)
-
-    def _make_s3_client(self):
-        return boto3.client(
-            "s3",
-            aws_access_key_id=self.s3_access_key_id,
-            aws_secret_access_key=self.s3_secret_key,
-            endpoint_url=self.s3_endpoint,
-            region_name=self.region,
-        )
-
-    def get_pods(self) -> List[Dict]:
-        return runpod.get_pods()  # type: ignore
-
-    def get_pod(self, pod_id: str) -> Dict:
-        return runpod.get_pod(pod_id)
-
-    def terminate_pod(self, pod_id: str) -> Optional[Dict]:
-        return runpod.terminate_pod(pod_id)
-
-    def upload_script_content(self, content: str, target: str) -> None:
-        s3 = self._make_s3_client()
-        s3.put_object(Bucket=self.network_volume_id, Key=target, Body=content.encode("utf-8"))
-
-    def download_file_content(self, remote_path: str) -> str:
-        s3 = self._make_s3_client()
-        response = s3.get_object(Bucket=self.network_volume_id, Key=remote_path)
-        return response["Body"].read().decode("utf-8")
-
-    def _build_docker_args(self, volume_mount_path: str, runpodcli_dir: str, runtime: int) -> str:
-        runpodcli_path = f"{volume_mount_path}/{runpodcli_dir}"
-        return (
-            "/bin/bash -c '"
-            + (f"mkdir -p {runpodcli_path}; bash {runpodcli_path}/start_pod.sh; sleep {max(runtime * 60, 20)}; bash {runpodcli_path}/terminate_pod.sh")
-            + "'"
-        )
-
-    def _provision_and_wait(self, pod_id: str, n_attempts: int = 60) -> Dict:
-        for i in range(n_attempts):
-            pod = runpod.get_pod(pod_id)
-            pod_runtime = pod.get("runtime")
-            if pod_runtime is None or not pod_runtime.get("ports"):
-                time.sleep(5)
-            else:
-                return pod
-        raise RuntimeError("Pod provisioning failed")
-
-    def create_pod(self, name: Optional[str], spec: PodSpec, runtime: int) -> Dict:
-        gpu_id = GPU_DISPLAY_NAME_TO_ID[spec.gpu_type] if spec.gpu_type in GPU_DISPLAY_NAME_TO_ID else spec.gpu_type
-
-        name = name or f"{os.getenv('USER')}-{GPU_ID_TO_DISPLAY_NAME[gpu_id]}"
-        spec.runpodcli_dir = spec.runpodcli_dir or f".tmp_{name.replace(' ', '_')}"
-
-        # Get scripts and upload to network volume
-        git_email = os.getenv("GIT_EMAIL", "")
-        git_name = os.getenv("GIT_NAME", "")
-        rpc_path = f"{spec.volume_mount_path}/{spec.runpodcli_dir}"
-        scripts = [
-            get_setup_root(rpc_path, spec.volume_mount_path),
-            get_setup_user(rpc_path, git_email, git_name),
-            get_start(rpc_path),
-            get_terminate(rpc_path),
-        ]
-        for script_name, script_content in scripts:
-            self.upload_script_content(content=script_content, target=f"{spec.runpodcli_dir}/{script_name}")
-
-        docker_args = self._build_docker_args(volume_mount_path=spec.volume_mount_path, runpodcli_dir=spec.runpodcli_dir, runtime=runtime)
-        name = name or f"{os.getenv('USER')}-{GPU_ID_TO_DISPLAY_NAME[gpu_id]}"
-
-        pod = runpod.create_pod(
-            name=name,
-            image_name=spec.image_name,
-            gpu_type_id=gpu_id,
-            cloud_type="SECURE",
-            gpu_count=spec.gpu_count,
-            container_disk_in_gb=spec.container_disk_in_gb,
-            min_vcpu_count=spec.min_vcpu_count,
-            min_memory_in_gb=spec.min_memory_in_gb,
-            docker_args=docker_args,
-            env=spec.env,
-            ports="8888/http,22/tcp",
-            volume_mount_path=spec.volume_mount_path,
-            network_volume_id=self.network_volume_id,
-        )
-
-        pod_id: str = pod.get("id")  # type: ignore
-        pod = self._provision_and_wait(pod_id)
-
-        return pod
-
-    def get_pod_public_ip_and_port(self, pod: Dict) -> Tuple[str, int]:
-        """Extract public IP and port from pod runtime info."""
-        public_ips = [i for i in pod["runtime"]["ports"] if i["isIpPublic"]]
-        if len(public_ips) != 1:
-            raise ValueError(f"Expected 1 public IP, got {public_ips}")
-        ip = public_ips[0].get("ip")
-        port = public_ips[0].get("publicPort")
-        return ip, port
-
-    def get_host_keys(self, remote_path: str) -> List[Tuple[str, str]]:
-        """Download host keys from S3 and return list of (algorithm, key) pairs."""
-        host_keys = []
-        for file in ["ssh_ed25519_host_key", "ssh_ecdsa_host_key", "ssh_rsa_host_key", "ssh_dsa_host_key"]:
-            try:
-                host_key_text = self.download_file_content(f"{remote_path}/{file}").strip()
-                alg, key, _ = host_key_text.split(" ")
-                host_keys.append((alg, key))
-            except Exception:
-                continue
-        return host_keys
-
-
 class RunPodManager:
     """RunPod Management CLI - A command-line tool for managing RunPod instances via the RunPod API.
 
@@ -225,21 +90,13 @@ class RunPodManager:
     """
 
     def __init__(self, env: Optional[str] = None) -> None:
-        """Initialize the RunPod manager.
-
-        Args:
-            env: Path to the .env file (optional). If not provided, will search for .env files in default locations.
-        """
-        # Load environment variables
         if env:
             logging.info(f"Using .env file: {env}")
-            # Use the specified .env file
             env_path = os.path.expanduser(env)
             if not os.path.exists(env_path):
                 raise FileNotFoundError(f"Specified .env file not found: {env_path}")
             load_dotenv(override=True, dotenv_path=env_path)
         else:
-            # Use default .env file search logic
             xdg_config_dir = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
             env_paths = [".env", os.path.join(xdg_config_dir, "runpod_cli/.env")]
             env_exists = [os.path.exists(os.path.expanduser(path)) for path in env_paths]
@@ -249,10 +106,49 @@ class RunPodManager:
                 raise FileExistsError(f"Multiple .env files found in {env_paths}")
             load_dotenv(override=True, dotenv_path=os.path.expanduser(env_paths[env_exists.index(True)]))
 
-        self._client = RunPodClient()
+        api_key = os.getenv("RUNPOD_API_KEY")
+        if not api_key:
+            raise ValueError("RUNPOD_API_KEY not found in environment. Set it in your .env file.")
+        runpod.api_key = api_key
 
-    def _parse_public_ip(self, pod: Dict) -> str:
-        """Parse public IP and port from pod runtime info."""
+        network_volume_id = os.getenv("RUNPOD_NETWORK_VOLUME_ID")
+        if not network_volume_id:
+            raise ValueError("RUNPOD_NETWORK_VOLUME_ID not found in environment. Set it in your .env file.")
+        self.network_volume_id: str = network_volume_id
+
+        s3_access_key_id = os.getenv("RUNPOD_S3_ACCESS_KEY_ID")
+        s3_secret_key = os.getenv("RUNPOD_S3_SECRET_KEY")
+        if not s3_access_key_id or not s3_secret_key:
+            raise ValueError("RUNPOD_S3_ACCESS_KEY_ID or RUNPOD_S3_SECRET_KEY not found in environment. Set it in your .env file.")
+        self.region = get_region_from_volume_id(self.network_volume_id)
+        self.s3_endpoint = get_s3_endpoint_from_volume_id(self.network_volume_id)
+        self._s3 = boto3.client(
+            "s3",
+            aws_access_key_id=s3_access_key_id,
+            aws_secret_access_key=s3_secret_key,
+            endpoint_url=self.s3_endpoint,
+            region_name=self.region,
+        )
+
+    def _build_docker_args(self, volume_mount_path: str, runpodcli_dir: str, runtime: int) -> str:
+        runpodcli_path = f"{volume_mount_path}/{runpodcli_dir}"
+        return (
+            "/bin/bash -c '"
+            + (f"mkdir -p {runpodcli_path}; bash {runpodcli_path}/start_pod.sh; sleep {max(runtime * 60, 20)}; bash {runpodcli_path}/terminate_pod.sh")
+            + "'"
+        )
+
+    def _provision_and_wait(self, pod_id: str, n_attempts: int = 60) -> Dict:
+        for _ in range(n_attempts):
+            pod = runpod.get_pod(pod_id)
+            pod_runtime = pod.get("runtime")
+            if pod_runtime is None or not pod_runtime.get("ports"):
+                time.sleep(5)
+            else:
+                return pod
+        raise RuntimeError("Pod provisioning failed")
+
+    def _get_public_ip_and_port(self, pod: Dict) -> Tuple[str, int]:
         public_ips = [i for i in pod["runtime"]["ports"] if i["isIpPublic"]]
         if len(public_ips) != 1:
             raise ValueError(f"Expected 1 public IP, got {public_ips}")
@@ -261,7 +157,6 @@ class RunPodManager:
         return ip, port
 
     def _parse_time_remaining(self, pod: Dict) -> str:
-        """Parse time remaining before pod shutdown from pod runtime info."""
         _sleep_re = re.compile(r"\bsleep\s+(\d+)\b")
         _date_re = re.compile(r":\s*(\w{3}\s+\w{3}\s+\d{2}\s+\d{4}\s+\d{2}:\d{2}:\d{2})\s+GMT")
         start_dt = None
@@ -290,7 +185,7 @@ class RunPodManager:
 
         Displays information about each pod including ID, name, GPU type, status, and connection details.
         """
-        pods = self._client.get_pods()
+        pods = runpod.get_pods()  # type: ignore
 
         for i, pod in enumerate(pods):
             logging.info(f"Pod {i + 1}:")
@@ -299,15 +194,12 @@ class RunPodManager:
             time_remaining = self._parse_time_remaining(pod)
             logging.info(f"  Time remaining (est.): {time_remaining}")
             if verbose:
-                public_ip, public_port = self._parse_public_ip(pod)
+                public_ip, public_port = self._get_public_ip_and_port(pod)
                 logging.info(f"  Public IP: {public_ip}")
                 logging.info(f"  Public port: {public_port}")
                 logging.info(f"  GPUs: {pod.get('gpuCount')} x {pod.get('machine', {}).get('gpuDisplayName')}")
                 for key in ["memoryInGb", "vcpuCount", "containerDiskInGb", "volumeMountPath", "costPerHr"]:
                     logging.info(f"  {key}: {pod.get(key)}")
-                # For debugging
-                # for key in pod.keys():
-                #     logging.info(f"  {key}: {pod.get(key)}")
             logging.info("")
 
     def create(
@@ -347,8 +239,6 @@ class RunPodManager:
             rpc create --runtime=240 --gpu_type="RTX A4000" --num_gpus=2 --name="dual-gpu-pod"
         """
         spec = PodSpec()
-
-        # Override spec with individual parameters if provided
         if gpu_type is not None:
             spec.gpu_type = gpu_type
         if image_name is not None:
@@ -372,12 +262,16 @@ class RunPodManager:
         if update_known_hosts is not None:
             spec.update_known_hosts = update_known_hosts
 
+        gpu_id = GPU_DISPLAY_NAME_TO_ID[spec.gpu_type] if spec.gpu_type in GPU_DISPLAY_NAME_TO_ID else spec.gpu_type
+        name = name or f"{os.getenv('USER')}-{GPU_ID_TO_DISPLAY_NAME[gpu_id]}"
+        spec.runpodcli_dir = spec.runpodcli_dir or f".tmp_{name.replace(' ', '_')}"
+
         logging.info("Creating pod with:")
         logging.info(f"  Name: {name}")
         logging.info(f"  Image: {spec.image_name}")
-        logging.info(f"  Network volume ID: {self._client.network_volume_id}")
-        logging.info(f"  Region: {self._client.region}")
-        logging.info(f"  S3 endpoint: {self._client.s3_endpoint}")
+        logging.info(f"  Network volume ID: {self.network_volume_id}")
+        logging.info(f"  Region: {self.region}")
+        logging.info(f"  S3 endpoint: {self.s3_endpoint}")
         logging.info(f"  GPU Type: {spec.gpu_type}")
         logging.info(f"  GPU Count: {spec.gpu_count}")
         logging.info(f"  Disk: {spec.container_disk_in_gb} GB")
@@ -386,12 +280,42 @@ class RunPodManager:
         logging.info(f"  runpodcli directory: {spec.runpodcli_dir}")
         logging.info(f"  Time limit: {runtime} minutes")
 
+        git_email = os.getenv("GIT_EMAIL", "")
+        git_name = os.getenv("GIT_NAME", "")
+        rpc_path = f"{spec.volume_mount_path}/{spec.runpodcli_dir}"
+        scripts = [
+            get_setup_root(rpc_path, spec.volume_mount_path),
+            get_setup_user(rpc_path, git_email, git_name),
+            get_start(rpc_path),
+            get_terminate(rpc_path),
+        ]
+        for script_name, script_content in scripts:
+            self._s3.put_object(Bucket=self.network_volume_id, Key=f"{spec.runpodcli_dir}/{script_name}", Body=script_content.encode("utf-8"))
+
+        docker_args = self._build_docker_args(volume_mount_path=spec.volume_mount_path, runpodcli_dir=spec.runpodcli_dir, runtime=runtime)
+
+        pod = runpod.create_pod(
+            name=name,
+            image_name=spec.image_name,
+            gpu_type_id=gpu_id,
+            cloud_type="SECURE",
+            gpu_count=spec.gpu_count,
+            container_disk_in_gb=spec.container_disk_in_gb,
+            min_vcpu_count=spec.min_vcpu_count,
+            min_memory_in_gb=spec.min_memory_in_gb,
+            docker_args=docker_args,
+            env=spec.env,
+            ports="8888/http,22/tcp",
+            volume_mount_path=spec.volume_mount_path,
+            network_volume_id=self.network_volume_id,
+        )
+
+        pod_id: str = pod.get("id")  # type: ignore
         logging.info("Pod created. Provisioning...")
-        pod = self._client.create_pod(name, spec, runtime)
+        pod = self._provision_and_wait(pod_id)
         logging.info("Pod provisioned.")
 
-        # Handle SSH config and known hosts
-        ip, port = self._client.get_pod_public_ip_and_port(pod)
+        ip, port = self._get_public_ip_and_port(pod)
 
         if spec.update_ssh_config:
             self._write_ssh_config(ip, port, spec.forward_agent)
@@ -419,10 +343,17 @@ class RunPodManager:
         logging.info(f"SSH config at {config_path} updated")
 
     def _update_known_hosts_file(self, public_ip: str, port: int, runpodcli_dir: str) -> None:
-        """Update SSH known hosts file with pod host keys."""
-        host_keys = self._client.get_host_keys(runpodcli_dir)
-        known_hosts_path = os.path.expanduser("~/.ssh/known_hosts.runpod_cli")
+        host_keys: List[Tuple[str, str]] = []
+        for file in ["ssh_ed25519_host_key", "ssh_ecdsa_host_key", "ssh_rsa_host_key", "ssh_dsa_host_key"]:
+            try:
+                obj = self._s3.get_object(Bucket=self.network_volume_id, Key=f"{runpodcli_dir}/{file}")
+                host_key_text = obj["Body"].read().decode("utf-8").strip()
+                alg, key, _ = host_key_text.split(" ")
+                host_keys.append((alg, key))
+            except Exception:
+                continue
 
+        known_hosts_path = os.path.expanduser("~/.ssh/known_hosts.runpod_cli")
         for alg, key in host_keys:
             try:
                 with open(known_hosts_path, "a") as dest:
@@ -441,7 +372,7 @@ class RunPodManager:
             rpc terminate --pod_id=abc123
         """
         logging.info(f"Terminating pod {pod_id}")
-        self._client.terminate_pod(pod_id)
+        _ = runpod.terminate_pod(pod_id)
 
 
 def main():
