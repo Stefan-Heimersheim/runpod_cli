@@ -97,17 +97,17 @@ class RunPodManager:
             load_dotenv(override=True, dotenv_path=os.path.expanduser(env_paths[env_exists.index(True)]))
 
         runpod.api_key = getenv("RUNPOD_API_KEY")
-        self.network_volume_id: str = getenv("RUNPOD_NETWORK_VOLUME_ID")
+        self._network_volume_id: str = getenv("RUNPOD_NETWORK_VOLUME_ID")
         s3_access_key_id = getenv("RUNPOD_S3_ACCESS_KEY_ID")
         s3_secret_key = getenv("RUNPOD_S3_SECRET_KEY")
-        self.region = get_region_from_volume_id(self.network_volume_id)
-        self.s3_endpoint = get_s3_endpoint_from_volume_id(self.network_volume_id)
+        self._region = get_region_from_volume_id(self._network_volume_id)
+        s3_endpoint_url = get_s3_endpoint_from_volume_id(self._network_volume_id)
         self._s3 = boto3.client(
             "s3",
             aws_access_key_id=s3_access_key_id,
             aws_secret_access_key=s3_secret_key,
-            endpoint_url=self.s3_endpoint,
-            region_name=self.region,
+            endpoint_url=s3_endpoint_url,
+            region_name=self._region,
         )
 
     def _build_docker_args(self, volume_mount_path: str, runpodcli_dir: str, runtime: int) -> str:
@@ -136,7 +136,7 @@ class RunPodManager:
         port = public_ips[0].get("publicPort")
         if not ip or port is None:
             raise ValueError(f"Expected public IP and port, got {ip} and {port} from {public_ips}")
-        return ip, port
+        return str(ip), int(port)
 
     def _parse_time_remaining(self, pod: Dict) -> str:
         _sleep_re = re.compile(r"\bsleep\s+(\d+)\b")
@@ -248,9 +248,8 @@ class RunPodManager:
         logging.info("Creating pod with:")
         logging.info(f"  Name: {name}")
         logging.info(f"  Image: {image_name}")
-        logging.info(f"  Network volume ID: {self.network_volume_id}")
-        logging.info(f"  Region: {self.region}")
-        logging.info(f"  S3 endpoint: {self.s3_endpoint}")
+        logging.info(f"  Network volume ID: {self._network_volume_id}")
+        logging.info(f"  Region: {self._region}")
         logging.info(f"  GPU Type: {gpu_type}")
         logging.info(f"  GPU Count: {num_gpus}")
         logging.info(f"  Disk: {disk} GB")
@@ -271,7 +270,7 @@ class RunPodManager:
         for script_name, script_content in scripts:
             # s3_key is relative to /volume_mount_path, while remote_scripts_path is relative to /
             s3_key = f"{runpodcli_dir}/{script_name}"
-            self._s3.put_object(Bucket=self.network_volume_id, Key=s3_key, Body=script_content.encode("utf-8"))
+            self._s3.put_object(Bucket=self._network_volume_id, Key=s3_key, Body=script_content.encode("utf-8"))
 
         docker_args = self._build_docker_args(volume_mount_path=volume_mount_path, runpodcli_dir=runpodcli_dir, runtime=runtime)
 
@@ -287,7 +286,7 @@ class RunPodManager:
             docker_args=docker_args,
             ports="8888/http,22/tcp",
             volume_mount_path=volume_mount_path,
-            network_volume_id=self.network_volume_id,
+            network_volume_id=self._network_volume_id,
         )
 
         pod_id: str = pod.get("id")  # type: ignore
@@ -324,7 +323,7 @@ class RunPodManager:
         host_keys: List[Tuple[str, str]] = []
         for file in ["ssh_ed25519_host_key", "ssh_ecdsa_host_key", "ssh_rsa_host_key", "ssh_dsa_host_key"]:
             try:
-                obj = self._s3.get_object(Bucket=self.network_volume_id, Key=f"{runpodcli_dir}/{file}")
+                obj = self._s3.get_object(Bucket=self._network_volume_id, Key=f"{runpodcli_dir}/{file}")
                 host_key_text = obj["Body"].read().decode("utf-8").strip()
                 alg, key, _ = host_key_text.split(" ")
                 host_keys.append((alg, key))
