@@ -120,13 +120,15 @@ def get_setup_user(runpodcli_path: str, git_email: str, git_name: str) -> Tuple[
 
         # Install Python packages using uv
         sudo pip install uv
-        sudo uv pip install ipykernel kaleido nbformat numpy scipy scikit-learn transformers datasets torchvision pandas matplotlib seaborn plotly jaxtyping einops tqdm ruff basedpyright umap-learn ipywidgets virtualenv  pytest git+https://github.com/callummcdougall/eindex.git --system
-
-        # Create a virtual environment for the user
-        uv venv ~/.venv --python 3.11 --system-site-packages
+        sudo uv pip install --system ipykernel kaleido nbformat numpy scipy scikit-learn transformers datasets torchvision pandas matplotlib seaborn plotly jaxtyping einops tqdm ruff basedpyright umap-learn ipywidgets virtualenv  pytest git+https://github.com/callummcdougall/eindex.git transformer_lens
+        # For plotly (kaleido) png export
+        sudo apt-get install -y libnss3 libatk-bridge2.0-0 libcups2 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2
+        sudo plotly_get_chrome -y
+        # Create a virtual environment for the user, install nnsight locally due to https://github.com/ndif-team/nnsight/issues/495
+        python_version=$(python --version | cut -d' ' -f2 | cut -d'.' -f1-2)
+        uv venv ~/.venv --python $python_version --system-site-packages
         source ~/.venv/bin/activate
-        pip install nnsight transformer_lens
-
+        python -m pip install nnsight
         echo "...user setup completed!"
     """.replace("RUNPODCLI_PATH", runpodcli_path)
         .replace("GIT_EMAIL", git_email)
