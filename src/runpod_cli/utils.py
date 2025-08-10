@@ -126,7 +126,8 @@ def get_setup_user(runpodcli_path: str, git_email: str, git_name: str) -> Tuple[
         sudo plotly_get_chrome -y
         # Create a virtual environment for the user, install nnsight locally due to https://github.com/ndif-team/nnsight/issues/495
         python_version=$(python --version | cut -d' ' -f2 | cut -d'.' -f1-2)
-        uv venv ~/.venv --python $python_version --system-site-packages
+        # uv venv ~/.venv --python $python_version --system-site-packages
+        virtualenv ~/.venv --system-site-packages
         source ~/.venv/bin/activate
         python -m pip install nnsight
         echo "...user setup completed!"
