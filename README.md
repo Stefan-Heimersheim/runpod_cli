@@ -130,7 +130,7 @@ into the environment.
 
 ## Known issues
 Python Fire has a known issue (fixed & merged on [GitHub](https://github.com/google/python-fire/pull/588/files) but not released on PyPI yet)
-with ipython==9.0 which will produce the following error:
+with ipython>=9.0 which will produce the following error:
 ```
 ERROR  | Uncaught exception | <class 'TypeError'>; Inspector.__init__() missing 1 required keyword-only argument: 'theme_name';
 ```
@@ -144,4 +144,3 @@ ERROR  | Uncaught exception | <class 'TypeError'>; Inspector.__init__() missing 
 - Pre-install VS Code / Cursor server
 - Change names & ssh aliases if a user requests multiple GPUs (e.g. runpod, runpod-1, etc.)
 - Create a .config/runpod_cli/config file to change the default values (e.g. GPU type, runtime, etc.)
-- Allow for shorter cmdline arguments (e.g. -g or --gpu instead of --gpu_type)
