@@ -1,69 +1,62 @@
 # RunPod CLI Manager
 
 A command-line tool for managing RunPod instances via the RunPod API, based on 
-[ApolloResearch/runpod_cli](https://github.com/ApolloResearch/runpod_cli). This
-version makes some larger changes:
-- Uses RunPod's S3 API instead of manually copying files to the network volume
-- Uses the official RunPod Docker image instead of a custom one (the RunPod image seems to download faster)
-- Installs a list of selected Python packages to the pod on startup (with `--system`)
-  - Intended use-case: Create environments with `--system-site-packages`.
-  - This allows us use the previously mentioned system packages (installed on the faster (ephemeral) container disk).
+[Apollo Research's original runpod_cli tool](https://github.com/ApolloResearch/runpod_cli/tree/legacy).
+
+This version makes several changes:
+- Uses **RunPod’s S3 API** to provision startup scripts & host keys (no manual volume setup).
+- Uses the **official RunPod Docker image** by default (often faster to pull).
+- Installs a curated set of **system Python packages** on startup using `uv --system` on the fast
+  container disk, so your venvs can reuse them via `--system-site-packages`.
 - Quality-of-life improvements:
-  - Set selected global git settings (including `user.name` and `user.email` if configured in `.env`)
-  - Automatically adds SSH key to known_hosts (obtained via secure https S3 API)
-  - Installs Claude Code & Codex on pod startup
-  - By default set the pod name based on username and GPU type
-  - Allow using GPU ID or display name to specify the GPU type
+  - Automatically adds pod **SSH host keys** to your local `known_hosts` (retrieved over HTTPS via S3).
+  - Optional global git config on pod (`GIT_NAME`, `GIT_EMAIL`).
+  - Installs **Claude Code** and **Codex** on pod startup.
+  - Defaults the pod name to `<username>-<gpu>`.
+  - Allows **GPU display name or ID** (e.g. `"RTX A4000"` or `"NVIDIA RTX A4000"`).
 
-These changes rely on [RunPod's S3 API](https://docs.runpod.io/serverless/storage/s3-api), which is currently only available in some regions. Make sure your network volume is in one of the following regions:
-- EUR-IS-1
-- EU-RO-1
-- EU-CZ-1
-- US-KS-2
+⚠️ These changes rely on [RunPod’s S3 API](https://docs.runpod.io/serverless/storage/s3-api),
+which is currently available only in some regions. Ensure your network volume is in one of:
+`EUR-IS-1`, `EU-RO-1`, `EU-CZ-1`, `US-KS-2`.
 
+🔒 **Security note:** Your RunPod keys are stored on the pod at `/root/.runpod_env` and are
+accessible to anyone who can log in to the pod. This includes team members whose SSH keys are
+added to your Runpod team account [settings](https://console.runpod.io/user/settings). (This
+is not a change from the original runpod_cli, but worth keeping in mind.)
 
-**Security note:** Your Runpod keys will be stored on the pod (`/root/.runpod.env`) and is accessible to anyone that can log in to your pod. This includes team members whose SSH keys are added to your Runpod team account [settings](https://console.runpod.io/user/settings).
+## Installation
 
-## Setup
+### Option 1: Install as a `uv` tool (recommended)
 
-### Installation
+```bash
+git clone https://github.com/ApolloResearch/runpod_cli.git
+cd runpod_cli
+uv tool install -e .
+uv tool update-shell   # ensure uv’s bin dir is on PATH
+# restart shell or re-source your profile
+```
 
-#### Option 1: Install as a UV tool (recommended)
+### Option 2: Install with pip
 
-1. Clone this repository
-2. Install as a UV tool:
-   ```bash
-   cd runpod_cli
-   uv tool install -e .
-   ```
-3. Ensure UV's bin directory is on your PATH:
-   ```bash
-   uv tool update-shell
-   ```
-   Then restart your terminal or re-source your shell config.
+```bash
+git clone https://github.com/ApolloResearch/runpod_cli.git
+cd runpod_cli
+pip install -e .
+```
 
-#### Option 2: Install with pip
+### Option 3: Install requirements only (not recommended)
 
-1. Clone this repository
-2. Install into current Python environment:
-   ```bash
-   cd runpod_cli
-   pip install -e .
-   ```
+```bash
+git clone https://github.com/ApolloResearch/runpod_cli.git
+cd runpod_cli
+pip install -r requirements.txt
+# In this case use: python -m runpod_cli
+```
 
-#### Option 3: Install requirements only (not recommended)
+## Configuration
 
-1. Clone this repository
-2. Install dependencies into current Python environment:
-   ```bash
-   cd runpod_cli
-   pip install -r requirements.txt
-   ```
-3. In this case you need to use `python src/runpod_cli/cli.py` to run the CLI.
-
-### API keys
-
-1. Create a RunPod [network-volume](https://docs.runpod.io/pods/storage/create-network-volumes). Choose a region from the S3-supported regions; pick one that has availability for your preferred GPU types.
+1. Create a RunPod [network-volume](https://docs.runpod.io/pods/storage/create-network-volumes).
+   Choose a region from the S3-supported regions; pick one that has availability for your preferred GPU types.
 
 2. [Optional but recommended] Add this line to the top of your `~/.ssh/config`:
 ```
@@ -76,21 +69,27 @@ mkdir -p ~/.config/runpod_cli
 cp .env.example ~/.config/runpod_cli/.env
 ```
 
-3. Add your RunPod credentials to the `.env` file. *Note: If you use a RunPod team, the team account needs to create those API keys.*
-   - **RUNPOD_API_KEY**: Your RunPod API key
-   - **RUNPOD_NETWORK_VOLUME_ID**: Your RunPod network volume ID
-   - **RUNPOD_S3_ACCESS_KEY_ID**: S3 access key for your RunPod network volume
-   - **RUNPOD_S3_SECRET_KEY**: S3 secret key for your RunPod network volume
-   - [Optional] **GIT_NAME and GIT_EMAIL**: Setting global git config on pod startup
+3. Fill the following variables in `~/.config/runpod_cli/.env`:
+- `RUNPOD_API_KEY` – your RunPod API key
+- `RUNPOD_NETWORK_VOLUME_ID` – your network volume ID
+- `RUNPOD_S3_ACCESS_KEY_ID` – S3 access key for the volume
+- `RUNPOD_S3_SECRET_KEY` – S3 secret key for the volume
+- (Optional) `GIT_NAME`, `GIT_EMAIL` – global git config on the pod
+
+*Note: If you use a RunPod team, the team account needs to create those API keys.*
 
 ## Usage
-* `rpc create` - Create a new pod (default: 1 hour runtime, 1 A4000 GPU)
-* `rpc list` - List all pods in your account
-* `rpc terminate` - Terminate a specific pod
 
-Instead of the `rpc` command, you can also use `python -m runpod_cli` to run the CLI.
+You can run the CLI either as:
+- `rpc` (installed console script), or
+- `python -m runpod_cli`
 
-### Command Examples
+### Available commands
+- `rpc create` — Create a pod (defaults: 1× **RTX A4000**, **60 minutes**).
+- `rpc list` — List your pods.
+- `rpc terminate` — Terminate a specific pod.
+
+### Examples
 Create a dev pod with one A4000 GPU for 1 hour (these are also the default values):
 
 ```bash
