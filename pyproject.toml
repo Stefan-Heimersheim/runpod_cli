@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "runpod_cli"
+version = "0.1.0"
+description = "A command-line tool for managing RunPod instances via the RunPod API"
+authors = [
+    {name = "Stefan"},
+    {name = "Dan"},
+]
+requires-python = ">=3.8"
+dependencies = [
+    "runpod",
+    "fire",
+    "python-dotenv",
+    "boto3",
+    "requests",
+]
+
+[project.scripts]
+rpc = "runpod_cli.cli:main"

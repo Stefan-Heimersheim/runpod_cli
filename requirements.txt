@@ -1,3 +1,4 @@
 runpod
 fire
 python-dotenv
+boto3
