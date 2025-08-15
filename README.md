@@ -44,13 +44,13 @@ cd runpod_cli
 pip install -e .
 ```
 
-### Option 3: Install requirements only (not recommended)
+### Option 3: Install requirements only (not recommended, for backwards compatibility)
 
 ```bash
 git clone https://github.com/ApolloResearch/runpod_cli.git
 cd runpod_cli
 pip install -r requirements.txt
-# In this case use: python -m runpod_cli
+# In this case use: python src/runpod_cli/cli.py
 ```
 
 ## Configuration
