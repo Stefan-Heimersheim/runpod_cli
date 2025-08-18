@@ -123,7 +123,7 @@ def get_setup_user(runpodcli_path: str, git_email: str, git_name: str) -> Tuple[
 
         # Install Python packages using uv
         sudo pip install uv
-        sudo uv pip install --system --compile-bytecode ipykernel kaleido nbformat numpy scipy scikit-learn transformers datasets torchvision pandas matplotlib seaborn plotly jaxtyping einops tqdm ruff basedpyright umap-learn ipywidgets virtualenv  pytest git+https://github.com/callummcdougall/eindex.git transformer_lens nnsight
+        sudo uv pip install --system --compile-bytecode ipykernel kaleido nbformat numpy scipy scikit-learn scikit-image transformers datasets torchvision pandas matplotlib seaborn plotly jaxtyping einops tqdm ruff basedpyright umap-learn ipywidgets virtualenv  pytest git+https://github.com/callummcdougall/eindex.git transformer_lens nnsight
         # For plotly (kaleido) png export
         sudo apt-get install -y libnss3 libatk-bridge2.0-0 libcups2 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2
         sudo plotly_get_chrome -y
