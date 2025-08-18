@@ -163,7 +163,8 @@ class RunPodManager:
         else:
             return "Unknown"
 
-    def _get_gpu_id(self, gpu_type: str) -> Tuple[str, str]:
+    def _get_gpu_id(self, gpu_type: str | int) -> Tuple[str, str]:
+        gpu_type = str(gpu_type)
         if gpu_type in GPU_DISPLAY_NAME_TO_ID:
             # A name was passed
             gpu_id = GPU_DISPLAY_NAME_TO_ID[gpu_type]
