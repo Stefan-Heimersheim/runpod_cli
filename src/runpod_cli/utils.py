@@ -58,10 +58,13 @@ def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, st
         echo "Setting up system environment..."
 
         useradd --uid 1000 --shell /bin/bash user --groups sudo --create-home
+        # Set NNSIGHT_LOG_PATH to avoid https://github.com/ndif-team/nnsight/issues/495
+        echo "export NNSIGHT_LOG_PATH=/root/.local/state/nnsight" >> /root/.profile
+        echo "export NNSIGHT_LOG_PATH=/home/user/.local/state/nnsight" >> /home/user/.profile
+        chown user:user /home/user/.profile
         mkdir -p  /home/user/.ssh/
-        touch /home/user/.ssh/authorized_keys
-        chown user /home/user/.ssh/authorized_keys
         cat /root/.ssh/authorized_keys >> /home/user/.ssh/authorized_keys
+        chown -R user:user /home/user/.ssh
 
         if [[ VOLUME_MOUNT_PATH != "/workspace" ]]; then
             rmdir /workspace
@@ -70,7 +73,7 @@ def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, st
 
         apt-get update
         apt-get upgrade -y
-        apt-get install -y sudo git vim ssh net-tools htop curl zip unzip tmux rsync libopenmpi-dev iputils-ping make fzf restic ripgrep wget pandoc poppler-utils pigz bzip2 nano
+        apt-get install -y sudo git vim ssh net-tools htop curl zip unzip tmux rsync libopenmpi-dev iputils-ping make fzf restic ripgrep wget pandoc poppler-utils pigz bzip2 nano locales
         echo 'user ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
         echo "export HF_HOME=/workspace/hf_home/" >> /home/user/.bashrc
         echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/user/.bashrc
@@ -120,13 +123,13 @@ def get_setup_user(runpodcli_path: str, git_email: str, git_name: str) -> Tuple[
 
         # Install Python packages using uv
         sudo pip install uv
-        sudo uv pip install ipykernel kaleido nbformat numpy scipy scikit-learn transformers datasets torchvision pandas matplotlib seaborn plotly jaxtyping einops tqdm ruff basedpyright umap-learn ipywidgets virtualenv  pytest git+https://github.com/callummcdougall/eindex.git --system
-
+        sudo uv pip install --system --compile-bytecode ipykernel kaleido nbformat numpy scipy scikit-learn scikit-image transformers datasets torchvision pandas matplotlib seaborn plotly jaxtyping einops tqdm ruff basedpyright umap-learn ipywidgets virtualenv  pytest git+https://github.com/callummcdougall/eindex.git transformer_lens nnsight
+        # For plotly (kaleido) png export
+        sudo apt-get install -y libnss3 libatk-bridge2.0-0 libcups2 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2
+        sudo plotly_get_chrome -y
         # Create a virtual environment for the user
-        uv venv ~/.venv --python 3.11 --system-site-packages
-        source ~/.venv/bin/activate
-        pip install nnsight transformer_lens
-
+        python_version=$(python --version | cut -d' ' -f2 | cut -d'.' -f1-2)
+        uv venv ~/.venv --python $python_version --system-site-packages
         echo "...user setup completed!"
     """.replace("RUNPODCLI_PATH", runpodcli_path)
         .replace("GIT_EMAIL", git_email)
