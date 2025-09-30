@@ -61,10 +61,10 @@ def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, st
         # Set NNSIGHT_LOG_PATH to avoid https://github.com/ndif-team/nnsight/issues/495
         echo "export NNSIGHT_LOG_PATH=/root/.local/state/nnsight" >> /root/.profile
         echo "export NNSIGHT_LOG_PATH=/home/user/.local/state/nnsight" >> /home/user/.profile
-        chown user /home/user/.profile
+        chown user:user /home/user/.profile
         mkdir -p  /home/user/.ssh/
         cat /root/.ssh/authorized_keys >> /home/user/.ssh/authorized_keys
-        chown user /home/user/.ssh/authorized_keys
+        chown -R user:user /home/user/.ssh
 
         if [[ VOLUME_MOUNT_PATH != "/workspace" ]]; then
             rmdir /workspace
