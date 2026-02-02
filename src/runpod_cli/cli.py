@@ -259,12 +259,12 @@ class RunPodManager:
             rpc create --gpu_type=CPU --cpus=8 --memory=64
             rpc create --ssh_keys="ssh-ed25519 AAAA... user@host"
         """
-        # Handle CPU-only pods
-        if gpu_type is None or gpu_type.upper() == "CPU":
+        # Handle CPU-only pods (convert to str in case Fire passes an int like 4090)
+        if gpu_type is None or str(gpu_type).upper() == "CPU":
             gpu_type_id = None
             gpu_display_name = "CPU"
         else:
-            gpu_type_id, gpu_display_name = self._get_gpu_id(gpu_type)
+            gpu_type_id, gpu_display_name = self._get_gpu_id(str(gpu_type))
 
         name = name or f"{os.getenv('USER')}-{gpu_display_name}"
         runpodcli_dir = f".tmp_{name.replace(' ', '_')}"
