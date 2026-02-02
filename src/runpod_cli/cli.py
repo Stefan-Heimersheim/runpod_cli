@@ -224,11 +224,11 @@ class RunPodManager:
         name: Optional[str] = None,
         runtime: int = 60,
         gpu_type: Optional[str] = "RTX A4000",
-        cpus: int = 1,
+        cpus: int = 2,
         disk: int = 30,
         forward_agent: bool = False,
         image_name: str = DEFAULT_IMAGE_NAME,
-        memory: int = 1,
+        memory: int = 16,
         num_gpus: int = 1,
         ssh_keys: Optional[str] = None,
         update_known_hosts: bool = True,
@@ -243,9 +243,9 @@ class RunPodManager:
             num_gpus: Number of GPUs (default: 1)
             name: Name for the pod (default: "$USER-$GPU_TYPE")
             env: Path to credentials .env (defalt: .env and ~/.config/runpod_cli/.env)
-            disk: Container disk size in GB (default: 30)
-            cpus: Minimum CPU count (default: 1)
-            memory: Minimum RAM in GB (default: 1)
+            disk: Container disk size in GB (default: 30, max 5 for CPU pods)
+            cpus: Minimum vCPU count (default: 2)
+            memory: Minimum RAM in GB (default: 16)
             ssh_keys: SSH public key(s) to override $PUBLIC_KEY (default: use RunPod account keys)
             forward_agent: Whether to forward SSH agent (default: False)
             update_known_hosts: Whether to update known hosts (default: True)
@@ -256,17 +256,17 @@ class RunPodManager:
             rpc create -r 60 -g "A100 SXM"
             rpc create --gpu_type="RTX A4000" --runtime=480
             rpc create --gpu_type=CPU
+            rpc create --gpu_type=CPU --cpus=8 --memory=64
             rpc create --ssh_keys="ssh-ed25519 AAAA... user@host"
         """
         # Handle CPU-only pods
         if gpu_type is None or gpu_type.upper() == "CPU":
-            gpu_id = None
-            gpu_name = "CPU"
-            num_gpus = 0
+            gpu_type_id = None
+            gpu_display_name = "CPU"
         else:
-            gpu_id, gpu_name = self._get_gpu_id(gpu_type)
+            gpu_type_id, gpu_display_name = self._get_gpu_id(gpu_type)
 
-        name = name or f"{os.getenv('USER')}-{gpu_name}"
+        name = name or f"{os.getenv('USER')}-{gpu_display_name}"
         runpodcli_dir = f".tmp_{name.replace(' ', '_')}"
 
         logging.info("Creating pod with:")
@@ -274,14 +274,14 @@ class RunPodManager:
         logging.info(f"  Image: {image_name}")
         logging.info(f"  Network volume ID: {self._network_volume_id}")
         logging.info(f"  Region: {self._region}")
-        if gpu_id:
-            logging.info(f"  GPU Type: {gpu_name}")
+        if gpu_type_id:
+            logging.info(f"  GPU Type: {gpu_display_name}")
             logging.info(f"  GPU Count: {num_gpus}")
-            logging.info(f"  Disk: {disk} GB")
-            logging.info(f"  Min CPU: {cpus}")
-            logging.info(f"  Min Memory: {memory} GB")
         else:
-            logging.info("  CPU-only: cpu5g-8-32 (8 vCPU, 32GB RAM, 5GB disk)")
+            logging.info(f"  CPU-only pod")
+        logging.info(f"  Min vCPU: {cpus}")
+        logging.info(f"  Min Memory: {memory} GB")
+        logging.info(f"  Disk: {disk} GB" + (" (max 5 for CPU)" if not gpu_type_id else ""))
         logging.info(f"  runpodcli directory: {runpodcli_dir}")
         logging.info(f"  Time limit: {runtime} minutes")
 
@@ -304,36 +304,20 @@ class RunPodManager:
         # Set up environment variables
         env = {"PUBLIC_KEY": ssh_keys} if ssh_keys else None
 
-        if gpu_id:
-            pod = self._api.create_pod(
-                name=name,
-                image_name=image_name,
-                gpu_type_id=gpu_id,
-                cloud_type="SECURE",
-                gpu_count=num_gpus,
-                container_disk_in_gb=disk,
-                min_vcpu_count=cpus,
-                min_memory_in_gb=memory,
-                docker_args=docker_args,
-                ports="8888/http,22/tcp",
-                volume_mount_path=volume_mount_path,
-                network_volume_id=self._network_volume_id,
-                env=env,
-            )
-        else:
-            # CPU-only pod - format: cpu{flavor}-{vcpus}-{memory}
-            instance_id = "cpu5g-8-32"
-            pod = self._api.create_cpu_pod(
-                name=name,
-                image_name=image_name,
-                instance_id=instance_id,
-                container_disk_in_gb=5,
-                docker_args=docker_args,
-                ports="8888/http,22/tcp",
-                volume_mount_path=volume_mount_path,
-                network_volume_id=self._network_volume_id,
-                env=env,
-            )
+        pod = self._api.create_pod(
+            name=name,
+            image_name=image_name,
+            gpu_type_id=gpu_type_id,
+            gpu_count=num_gpus,
+            container_disk_in_gb=disk,
+            min_vcpu_count=cpus,
+            min_memory_in_gb=memory,
+            docker_args=docker_args,
+            ports="8888/http,22/tcp",
+            volume_mount_path=volume_mount_path,
+            network_volume_id=self._network_volume_id,
+            env=env,
+        )
 
         pod_id: str = pod.get("id")  # type: ignore
         logging.info("Pod created. Provisioning...")
