@@ -262,3 +262,14 @@ class RunPodGraphQL:
             if vol.get("id") == volume_id:
                 return vol
         raise ValueError(f"Network volume {volume_id} not found")
+
+    def get_pub_key(self) -> Optional[str]:
+        query = """
+        query {
+          myself {
+            pubKey
+          }
+        }
+        """
+        data = self._request(query)
+        return data.get("myself", {}).get("pubKey")

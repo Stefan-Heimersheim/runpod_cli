@@ -284,8 +284,12 @@ class RunPodManager:
 
         docker_args = self._build_docker_args(volume_mount_path=volume_mount_path, runpodcli_dir=runpodcli_dir, runtime=runtime)
 
-        # Set up environment variables
-        env = {"PUBLIC_KEY": ssh_keys} if ssh_keys else None
+        # Set up environment variables - use provided keys or fetch from RunPod account
+        if ssh_keys:
+            public_keys = ssh_keys
+        else:
+            public_keys = self._api.get_pub_key()
+        env = {"PUBLIC_KEY": public_keys} if public_keys else None
 
         pod = self._api.create_pod(
             name=name,
@@ -351,6 +355,18 @@ class RunPodManager:
                 logging.info(f"Added {alg} host key to {known_hosts_path}")
             except Exception as e:
                 logging.error(f"Error adding host key: {e}")
+
+    def pubkey(self) -> None:
+        """Fetch and display SSH public keys from RunPod account.
+
+        Example:
+            rpc pubkey
+        """
+        pub_key = self._api.get_pub_key()
+        if pub_key:
+            print(pub_key)
+        else:
+            logging.info("No public keys found in RunPod account")
 
     def terminate(self, *pod_ids: str) -> None:
         """Terminate one or more RunPod instances.
