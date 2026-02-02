@@ -369,17 +369,22 @@ class RunPodManager:
             except Exception as e:
                 logging.error(f"Error adding host key: {e}")
 
-    def terminate(self, pod_id: str) -> None:
-        """Terminate a specific RunPod instance.
+    def terminate(self, *pod_ids: str) -> None:
+        """Terminate one or more RunPod instances.
 
         Args:
-            pod_id: ID of the pod to terminate
+            pod_ids: IDs of the pods to terminate (space-separated)
 
         Example:
-            rpc terminate --pod_id=abc123
+            rpc terminate abc123
+            rpc terminate abc123 def456 ghi789
         """
-        logging.info(f"Terminating pod {pod_id}")
-        self._api.terminate_pod(pod_id)
+        if not pod_ids:
+            logging.error("No pod IDs provided")
+            return
+        for pod_id in pod_ids:
+            logging.info(f"Terminating pod {pod_id}")
+            self._api.terminate_pod(pod_id)
 
 
 def main():
