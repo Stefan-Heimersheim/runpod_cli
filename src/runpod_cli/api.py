@@ -147,7 +147,7 @@ class RunPodGraphQL:
         gpu_type_id: Optional[str] = None,
         cloud_type: str = "SECURE",
         gpu_count: int = 1,
-        container_disk_in_gb: int = 30,
+        container_disk_in_gb: int = 20,
         min_vcpu_count: int = 2,
         min_memory_in_gb: int = 16,
         docker_args: Optional[str] = None,
@@ -178,7 +178,7 @@ class RunPodGraphQL:
                     "name": name,
                     "imageName": image_name,
                     "instanceId": instance_id,
-                    "containerDiskInGb": min(container_disk_in_gb, 5),  # CPU pods max 5GB
+                    "containerDiskInGb": min(container_disk_in_gb, 20),  # CPU pods max 20GB
                 }
             }
             result_key = "deployCpuPod"

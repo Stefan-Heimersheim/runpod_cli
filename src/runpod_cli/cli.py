@@ -208,7 +208,7 @@ class RunPodManager:
         runtime: int = 60,
         gpu_type: Optional[str] = "RTX A4000",
         cpus: int = 2,
-        disk: int = 30,
+        disk: int = 20,
         forward_agent: bool = False,
         image_name: str = DEFAULT_IMAGE_NAME,
         memory: int = 16,
@@ -226,7 +226,7 @@ class RunPodManager:
             num_gpus: Number of GPUs (default: 1)
             name: Name for the pod (default: "$USER-$GPU_TYPE")
             env: Path to credentials .env (defalt: .env and ~/.config/runpod_cli/.env)
-            disk: Container disk size in GB (default: 30, max 5 for CPU pods)
+            disk: Container disk size in GB (default: 20, max 20 for CPU pods)
             cpus: Minimum vCPU count (default: 2)
             memory: Minimum RAM in GB (default: 16)
             ssh_keys: SSH public key(s) to override $PUBLIC_KEY (default: use RunPod account keys)
@@ -264,7 +264,7 @@ class RunPodManager:
             logging.info(f"  CPU-only pod")
         logging.info(f"  Min vCPU: {cpus}")
         logging.info(f"  Min Memory: {memory} GB")
-        logging.info(f"  Disk: {disk} GB" + (" (max 5 for CPU)" if not gpu_type_id else ""))
+        logging.info(f"  Disk: {min(disk, 20) if not gpu_type_id else disk} GB")
         logging.info(f"  runpodcli directory: {runpodcli_dir}")
         logging.info(f"  Time limit: {runtime} minutes")
 
