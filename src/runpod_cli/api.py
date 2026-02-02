@@ -104,7 +104,7 @@ class RunPodGraphQL:
         self,
         name: str,
         image_name: str,
-        gpu_type_id: str,
+        gpu_type_id: Optional[str] = None,
         cloud_type: str = "SECURE",
         gpu_count: int = 1,
         container_disk_in_gb: int = 30,
@@ -114,6 +114,7 @@ class RunPodGraphQL:
         ports: Optional[str] = None,
         volume_mount_path: Optional[str] = None,
         network_volume_id: Optional[str] = None,
+        data_center_id: Optional[str] = None,
     ) -> Dict:
         query = """
         mutation PodFindAndDeployOnDemand($input: PodFindAndDeployOnDemandInput) {
@@ -128,7 +129,6 @@ class RunPodGraphQL:
             "input": {
                 "name": name,
                 "imageName": image_name,
-                "gpuTypeId": gpu_type_id,
                 "cloudType": cloud_type,
                 "gpuCount": gpu_count,
                 "containerDiskInGb": container_disk_in_gb,
@@ -136,6 +136,10 @@ class RunPodGraphQL:
                 "minMemoryInGb": min_memory_in_gb,
             }
         }
+        if gpu_type_id:
+            variables["input"]["gpuTypeId"] = gpu_type_id
+        if data_center_id:
+            variables["input"]["dataCenterId"] = data_center_id
         if docker_args:
             variables["input"]["dockerArgs"] = docker_args
         if ports:
@@ -146,6 +150,48 @@ class RunPodGraphQL:
             variables["input"]["networkVolumeId"] = network_volume_id
         data = self._request(query, variables)
         return data.get("podFindAndDeployOnDemand", {})
+
+    def create_cpu_pod(
+        self,
+        name: str,
+        image_name: str,
+        instance_id: str = "cpu3c-2-4",
+        container_disk_in_gb: int = 30,
+        docker_args: Optional[str] = None,
+        ports: Optional[str] = None,
+        volume_mount_path: Optional[str] = None,
+        network_volume_id: Optional[str] = None,
+        data_center_id: Optional[str] = None,
+    ) -> Dict:
+        query = """
+        mutation DeployCpuPod($input: deployCpuPodInput!) {
+          deployCpuPod(input: $input) {
+            id
+            imageName
+            machineId
+          }
+        }
+        """
+        variables: Dict[str, Any] = {
+            "input": {
+                "name": name,
+                "imageName": image_name,
+                "instanceId": instance_id,
+                "containerDiskInGb": container_disk_in_gb,
+            }
+        }
+        if data_center_id:
+            variables["input"]["dataCenterId"] = data_center_id
+        if docker_args:
+            variables["input"]["dockerArgs"] = docker_args
+        if ports:
+            variables["input"]["ports"] = ports
+        if volume_mount_path:
+            variables["input"]["volumeMountPath"] = volume_mount_path
+        if network_volume_id:
+            variables["input"]["networkVolumeId"] = network_volume_id
+        data = self._request(query, variables)
+        return data.get("deployCpuPod", {})
 
     def terminate_pod(self, pod_id: str) -> None:
         query = """

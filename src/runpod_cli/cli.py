@@ -223,7 +223,7 @@ class RunPodManager:
         self,
         name: Optional[str] = None,
         runtime: int = 60,
-        gpu_type: str = "RTX A4000",
+        gpu_type: Optional[str] = "RTX A4000",
         cpus: int = 1,
         disk: int = 30,
         forward_agent: bool = False,
@@ -238,7 +238,7 @@ class RunPodManager:
 
         Args:
             runtime: Time in minutes for pod to run (default: 60)
-            gpu_type: GPU type (default: "RTX A4000")
+            gpu_type: GPU type, or "CPU" for CPU-only pod (default: "RTX A4000")
             num_gpus: Number of GPUs (default: 1)
             name: Name for the pod (default: "$USER-$GPU_TYPE")
             env: Path to credentials .env (defalt: .env and ~/.config/runpod_cli/.env)
@@ -253,8 +253,16 @@ class RunPodManager:
         Example:
             rpc create -r 60 -g "A100 SXM"
             rpc create --gpu_type="RTX A4000" --runtime=480
+            rpc create --gpu_type=CPU
         """
-        gpu_id, gpu_name = self._get_gpu_id(gpu_type)
+        # Handle CPU-only pods
+        if gpu_type is None or gpu_type.upper() == "CPU":
+            gpu_id = None
+            gpu_name = "CPU"
+            num_gpus = 0
+        else:
+            gpu_id, gpu_name = self._get_gpu_id(gpu_type)
+
         name = name or f"{os.getenv('USER')}-{gpu_name}"
         runpodcli_dir = f".tmp_{name.replace(' ', '_')}"
 
@@ -263,11 +271,14 @@ class RunPodManager:
         logging.info(f"  Image: {image_name}")
         logging.info(f"  Network volume ID: {self._network_volume_id}")
         logging.info(f"  Region: {self._region}")
-        logging.info(f"  GPU Type: {gpu_type}")
-        logging.info(f"  GPU Count: {num_gpus}")
-        logging.info(f"  Disk: {disk} GB")
-        logging.info(f"  Min CPU: {cpus}")
-        logging.info(f"  Min Memory: {memory} GB")
+        if gpu_id:
+            logging.info(f"  GPU Type: {gpu_name}")
+            logging.info(f"  GPU Count: {num_gpus}")
+            logging.info(f"  Disk: {disk} GB")
+            logging.info(f"  Min CPU: {cpus}")
+            logging.info(f"  Min Memory: {memory} GB")
+        else:
+            logging.info("  CPU-only: cpu5g-8-32 (8 vCPU, 32GB RAM, 5GB disk)")
         logging.info(f"  runpodcli directory: {runpodcli_dir}")
         logging.info(f"  Time limit: {runtime} minutes")
 
@@ -287,20 +298,35 @@ class RunPodManager:
 
         docker_args = self._build_docker_args(volume_mount_path=volume_mount_path, runpodcli_dir=runpodcli_dir, runtime=runtime)
 
-        pod = self._api.create_pod(
-            name=name,
-            image_name=image_name,
-            gpu_type_id=gpu_id,
-            cloud_type="SECURE",
-            gpu_count=num_gpus,
-            container_disk_in_gb=disk,
-            min_vcpu_count=cpus,
-            min_memory_in_gb=memory,
-            docker_args=docker_args,
-            ports="8888/http,22/tcp",
-            volume_mount_path=volume_mount_path,
-            network_volume_id=self._network_volume_id,
-        )
+        if gpu_id:
+            pod = self._api.create_pod(
+                name=name,
+                image_name=image_name,
+                gpu_type_id=gpu_id,
+                cloud_type="SECURE",
+                gpu_count=num_gpus,
+                container_disk_in_gb=disk,
+                min_vcpu_count=cpus,
+                min_memory_in_gb=memory,
+                docker_args=docker_args,
+                ports="8888/http,22/tcp",
+                volume_mount_path=volume_mount_path,
+                network_volume_id=self._network_volume_id,
+            )
+        else:
+            # CPU-only pod - format: cpu{flavor}-{vcpus}-{memory}
+            instance_id = "cpu5g-8-32"
+            pod = self._api.create_cpu_pod(
+                name=name,
+                image_name=image_name,
+                instance_id=instance_id,
+                container_disk_in_gb=5,
+                docker_args=docker_args,
+                ports="8888/http,22/tcp",
+                volume_mount_path=volume_mount_path,
+                network_volume_id=self._network_volume_id,
+                data_center_id=self._region,
+            )
 
         pod_id: str = pod.get("id")  # type: ignore
         logging.info("Pod created. Provisioning...")
