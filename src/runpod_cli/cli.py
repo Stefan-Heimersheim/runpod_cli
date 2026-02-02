@@ -1,3 +1,4 @@
+import glob
 import logging
 import os
 import re
@@ -229,7 +230,7 @@ class RunPodManager:
             disk: Container disk size in GB (default: 20, max 20 for CPU pods)
             cpus: Minimum vCPU count (default: 2)
             memory: Minimum RAM in GB (default: 16)
-            ssh_keys: SSH public key(s) to override $PUBLIC_KEY (default: use RunPod account keys)
+            ssh_keys: Path(s) to SSH public key file(s), space-separated, supports wildcards (default: use RunPod account keys)
             forward_agent: Whether to forward SSH agent (default: False)
             update_known_hosts: Whether to update known hosts (default: True)
             update_ssh_config: Whether to update SSH config (default: True)
@@ -240,7 +241,9 @@ class RunPodManager:
             rpc create --gpu_type="RTX A4000" --runtime=480
             rpc create --gpu_type=CPU
             rpc create --gpu_type=CPU --cpus=8 --memory=64
-            rpc create --ssh_keys="ssh-ed25519 AAAA... user@host"
+            rpc create --ssh_keys=~/.ssh/id_ed25519.pub
+            rpc create --ssh_keys="~/.ssh/id_ed25519.pub ~/.ssh/id_rsa.pub"
+            rpc create --ssh_keys="~/.ssh/*.pub"
         """
         # Handle CPU-only pods (convert to str in case Fire passes an int like 4090)
         if gpu_type is None or str(gpu_type).upper() == "CPU":
@@ -284,10 +287,24 @@ class RunPodManager:
 
         docker_args = self._build_docker_args(volume_mount_path=volume_mount_path, runpodcli_dir=runpodcli_dir, runtime=runtime)
 
-        # Set up environment variables - use provided keys or fetch from RunPod account
+        # Set up environment variables - use provided key files or fetch from RunPod account
         if ssh_keys:
-            public_keys = ssh_keys
+            # Read SSH keys from file(s) - supports wildcards and space-separated paths
+            key_contents = []
+            key_files = []
+            for pattern in ssh_keys.split():
+                pattern = os.path.expanduser(pattern.strip())
+                paths = glob.glob(pattern)
+                if not paths:
+                    raise FileNotFoundError(f"No files matching: {pattern}")
+                for path in sorted(paths):
+                    with open(path) as f:
+                        key_contents.append(f.read().strip())
+                    key_files.append(path)
+            logging.info(f"Using SSH keys from: {', '.join(key_files)}")
+            public_keys = "\n".join(key_contents)
         else:
+            logging.info("Using SSH keys from RunPod account")
             public_keys = self._api.get_pub_key()
         env = {"PUBLIC_KEY": public_keys} if public_keys else None
 
