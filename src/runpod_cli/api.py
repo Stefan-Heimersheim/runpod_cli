@@ -114,7 +114,6 @@ class RunPodGraphQL:
         ports: Optional[str] = None,
         volume_mount_path: Optional[str] = None,
         network_volume_id: Optional[str] = None,
-        data_center_id: Optional[str] = None,
         env: Optional[Dict[str, str]] = None,
     ) -> Dict:
         query = """
@@ -139,8 +138,6 @@ class RunPodGraphQL:
         }
         if gpu_type_id:
             variables["input"]["gpuTypeId"] = gpu_type_id
-        if data_center_id:
-            variables["input"]["dataCenterId"] = data_center_id
         if docker_args:
             variables["input"]["dockerArgs"] = docker_args
         if ports:
@@ -164,7 +161,6 @@ class RunPodGraphQL:
         ports: Optional[str] = None,
         volume_mount_path: Optional[str] = None,
         network_volume_id: Optional[str] = None,
-        data_center_id: Optional[str] = None,
         env: Optional[Dict[str, str]] = None,
     ) -> Dict:
         query = """
@@ -184,8 +180,6 @@ class RunPodGraphQL:
                 "containerDiskInGb": container_disk_in_gb,
             }
         }
-        if data_center_id:
-            variables["input"]["dataCenterId"] = data_center_id
         if docker_args:
             variables["input"]["dockerArgs"] = docker_args
         if ports:

@@ -332,7 +332,6 @@ class RunPodManager:
                 ports="8888/http,22/tcp",
                 volume_mount_path=volume_mount_path,
                 network_volume_id=self._network_volume_id,
-                data_center_id=self._region,
                 env=env,
             )
 
