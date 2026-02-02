@@ -230,6 +230,7 @@ class RunPodManager:
         image_name: str = DEFAULT_IMAGE_NAME,
         memory: int = 1,
         num_gpus: int = 1,
+        ssh_keys: Optional[str] = None,
         update_known_hosts: bool = True,
         update_ssh_config: bool = True,
         volume_mount_path: str = "/network",
@@ -245,6 +246,7 @@ class RunPodManager:
             disk: Container disk size in GB (default: 30)
             cpus: Minimum CPU count (default: 1)
             memory: Minimum RAM in GB (default: 1)
+            ssh_keys: SSH public key(s) to override $PUBLIC_KEY (default: use RunPod account keys)
             forward_agent: Whether to forward SSH agent (default: False)
             update_known_hosts: Whether to update known hosts (default: True)
             update_ssh_config: Whether to update SSH config (default: True)
@@ -254,6 +256,7 @@ class RunPodManager:
             rpc create -r 60 -g "A100 SXM"
             rpc create --gpu_type="RTX A4000" --runtime=480
             rpc create --gpu_type=CPU
+            rpc create --ssh_keys="ssh-ed25519 AAAA... user@host"
         """
         # Handle CPU-only pods
         if gpu_type is None or gpu_type.upper() == "CPU":
@@ -298,6 +301,9 @@ class RunPodManager:
 
         docker_args = self._build_docker_args(volume_mount_path=volume_mount_path, runpodcli_dir=runpodcli_dir, runtime=runtime)
 
+        # Set up environment variables
+        env = {"PUBLIC_KEY": ssh_keys} if ssh_keys else None
+
         if gpu_id:
             pod = self._api.create_pod(
                 name=name,
@@ -312,6 +318,7 @@ class RunPodManager:
                 ports="8888/http,22/tcp",
                 volume_mount_path=volume_mount_path,
                 network_volume_id=self._network_volume_id,
+                env=env,
             )
         else:
             # CPU-only pod - format: cpu{flavor}-{vcpus}-{memory}
@@ -326,6 +333,7 @@ class RunPodManager:
                 volume_mount_path=volume_mount_path,
                 network_volume_id=self._network_volume_id,
                 data_center_id=self._region,
+                env=env,
             )
 
         pod_id: str = pod.get("id")  # type: ignore

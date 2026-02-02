@@ -115,6 +115,7 @@ class RunPodGraphQL:
         volume_mount_path: Optional[str] = None,
         network_volume_id: Optional[str] = None,
         data_center_id: Optional[str] = None,
+        env: Optional[Dict[str, str]] = None,
     ) -> Dict:
         query = """
         mutation PodFindAndDeployOnDemand($input: PodFindAndDeployOnDemandInput) {
@@ -148,6 +149,8 @@ class RunPodGraphQL:
             variables["input"]["volumeMountPath"] = volume_mount_path
         if network_volume_id:
             variables["input"]["networkVolumeId"] = network_volume_id
+        if env:
+            variables["input"]["env"] = [{"key": k, "value": v} for k, v in env.items()]
         data = self._request(query, variables)
         return data.get("podFindAndDeployOnDemand", {})
 
@@ -162,6 +165,7 @@ class RunPodGraphQL:
         volume_mount_path: Optional[str] = None,
         network_volume_id: Optional[str] = None,
         data_center_id: Optional[str] = None,
+        env: Optional[Dict[str, str]] = None,
     ) -> Dict:
         query = """
         mutation DeployCpuPod($input: deployCpuPodInput!) {
@@ -190,6 +194,8 @@ class RunPodGraphQL:
             variables["input"]["volumeMountPath"] = volume_mount_path
         if network_volume_id:
             variables["input"]["networkVolumeId"] = network_volume_id
+        if env:
+            variables["input"]["env"] = [{"key": k, "value": v} for k, v in env.items()]
         data = self._request(query, variables)
         return data.get("deployCpuPod", {})
 
