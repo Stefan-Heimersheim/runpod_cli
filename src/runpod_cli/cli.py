@@ -8,7 +8,6 @@ from typing import Dict, List, Optional, Tuple
 
 import boto3
 import fire
-import requests
 from dotenv import load_dotenv
 
 try:
@@ -36,23 +35,6 @@ except ImportError:
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(asctime)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 
-
-
-def get_region_from_volume_id(volume_id: str) -> str:
-    api_key = os.getenv("RUNPOD_API_KEY")
-    url = f"https://rest.runpod.io/v1/networkvolumes/{volume_id}"
-    headers = {"Authorization": f"Bearer {api_key}"}
-    response = requests.get(url, headers=headers)
-    if response.status_code != 200:
-        raise ValueError(f"Failed to get volume info: {response.text}")
-    volume_info = response.json()
-    return volume_info.get("dataCenterId")
-
-
-def get_s3_endpoint_from_volume_id(volume_id: str) -> str:
-    data_center_id = get_region_from_volume_id(volume_id)
-    s3_endpoint = f"https://s3api-{data_center_id.lower()}.runpod.io/"
-    return s3_endpoint
 
 
 def getenv(key: str) -> str:
@@ -101,8 +83,9 @@ class RunPodManager:
         self._network_volume_id: str = getenv("RUNPOD_NETWORK_VOLUME_ID")
         s3_access_key_id = getenv("RUNPOD_S3_ACCESS_KEY_ID")
         s3_secret_key = getenv("RUNPOD_S3_SECRET_KEY")
-        self._region = get_region_from_volume_id(self._network_volume_id)
-        s3_endpoint_url = get_s3_endpoint_from_volume_id(self._network_volume_id)
+        volume_info = self._api.get_network_volume(self._network_volume_id)
+        self._region = volume_info["dataCenterId"]
+        s3_endpoint_url = f"https://s3api-{self._region.lower()}.runpod.io/"
         self._s3 = boto3.client(
             "s3",
             aws_access_key_id=s3_access_key_id,

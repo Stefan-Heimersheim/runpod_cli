@@ -243,3 +243,22 @@ class RunPodGraphQL:
         """
         data = self._request(query)
         return data.get("myself", {}).get("teams", [])
+
+    def get_network_volume(self, volume_id: str) -> Dict:
+        query = """
+        query {
+          myself {
+            networkVolumes {
+              id
+              name
+              dataCenterId
+            }
+          }
+        }
+        """
+        data = self._request(query)
+        volumes = data.get("myself", {}).get("networkVolumes", [])
+        for vol in volumes:
+            if vol.get("id") == volume_id:
+                return vol
+        raise ValueError(f"Network volume {volume_id} not found")
