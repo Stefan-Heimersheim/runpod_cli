@@ -12,6 +12,7 @@ import requests
 from dotenv import load_dotenv
 
 try:
+    from .api import RunPodGraphQL
     from .utils import (
         DEFAULT_IMAGE_NAME,
         GPU_DISPLAY_NAME_TO_ID,
@@ -22,6 +23,7 @@ try:
         get_terminate,
     )
 except ImportError:
+    from api import RunPodGraphQL  # type: ignore
     from utils import (  # type: ignore
         DEFAULT_IMAGE_NAME,
         GPU_DISPLAY_NAME_TO_ID,
@@ -34,7 +36,6 @@ except ImportError:
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(asctime)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 
-import runpod  # noqa: E402
 
 
 def get_region_from_volume_id(volume_id: str) -> str:
@@ -96,7 +97,7 @@ class RunPodManager:
                 raise FileExistsError(f"Multiple .env files found in {env_paths}")
             load_dotenv(override=True, dotenv_path=os.path.expanduser(env_paths[env_exists.index(True)]))
 
-        runpod.api_key = getenv("RUNPOD_API_KEY")
+        self._api = RunPodGraphQL(getenv("RUNPOD_API_KEY"), team_id=os.getenv("RUNPOD_TEAM_ID"))
         self._network_volume_id: str = getenv("RUNPOD_NETWORK_VOLUME_ID")
         s3_access_key_id = getenv("RUNPOD_S3_ACCESS_KEY_ID")
         s3_secret_key = getenv("RUNPOD_S3_SECRET_KEY")
@@ -120,7 +121,7 @@ class RunPodManager:
 
     def _provision_and_wait(self, pod_id: str, n_attempts: int = 60) -> Dict:
         for _ in range(n_attempts):
-            pod = runpod.get_pod(pod_id)
+            pod = self._api.get_pod(pod_id)
             pod_runtime = pod.get("runtime")
             if pod_runtime is None or not pod_runtime.get("ports"):
                 time.sleep(5)
@@ -190,7 +191,7 @@ class RunPodManager:
 
         Displays information about each pod including ID, name, GPU type, status, and connection details.
         """
-        pods = runpod.get_pods()  # type: ignore
+        pods = self._api.get_pods()
 
         for i, pod in enumerate(pods):
             logging.info(f"Pod {i + 1}:")
@@ -205,6 +206,17 @@ class RunPodManager:
                 logging.info(f"  GPUs: {pod.get('gpuCount')} x {pod.get('machine', {}).get('gpuDisplayName')}")
                 for key in ["memoryInGb", "vcpuCount", "containerDiskInGb", "volumeMountPath", "costPerHr"]:
                     logging.info(f"  {key}: {pod.get(key)}")
+            logging.info("")
+
+    def teams(self) -> None:
+        """List teams you belong to, showing team IDs for use with RUNPOD_TEAM_ID."""
+        teams = self._api.get_teams()
+        if not teams:
+            logging.info("You are not a member of any teams.")
+            return
+        for team in teams:
+            logging.info(f"Team: {team.get('name')}")
+            logging.info(f"  ID: {team.get('id')}")
             logging.info("")
 
     def create(
@@ -275,7 +287,7 @@ class RunPodManager:
 
         docker_args = self._build_docker_args(volume_mount_path=volume_mount_path, runpodcli_dir=runpodcli_dir, runtime=runtime)
 
-        pod = runpod.create_pod(
+        pod = self._api.create_pod(
             name=name,
             image_name=image_name,
             gpu_type_id=gpu_id,
@@ -350,7 +362,7 @@ class RunPodManager:
             rpc terminate --pod_id=abc123
         """
         logging.info(f"Terminating pod {pod_id}")
-        _ = runpod.terminate_pod(pod_id)
+        self._api.terminate_pod(pod_id)
 
 
 def main():
