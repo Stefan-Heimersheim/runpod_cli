@@ -1,3 +1,4 @@
+import base64
 import glob
 import logging
 import os
@@ -5,9 +6,8 @@ import re
 import textwrap
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
-import boto3
 import fire
 from dotenv import load_dotenv
 
@@ -82,26 +82,34 @@ class RunPodManager:
 
         self._api = RunPodGraphQL(getenv("RUNPOD_API_KEY"), team_id=os.getenv("RUNPOD_TEAM_ID"))
         self._network_volume_id: str = getenv("RUNPOD_NETWORK_VOLUME_ID")
-        s3_access_key_id = getenv("RUNPOD_S3_ACCESS_KEY_ID")
-        s3_secret_key = getenv("RUNPOD_S3_SECRET_KEY")
         volume_info = self._api.get_network_volume(self._network_volume_id)
         self._region = volume_info["dataCenterId"]
-        s3_endpoint_url = f"https://s3api-{self._region.lower()}.runpod.io/"
-        self._s3 = boto3.client(
-            "s3",
-            aws_access_key_id=s3_access_key_id,
-            aws_secret_access_key=s3_secret_key,
-            endpoint_url=s3_endpoint_url,
-            region_name=self._region,
-        )
 
-    def _build_docker_args(self, volume_mount_path: str, runpodcli_dir: str, runtime: int) -> str:
+    def _build_docker_args(
+        self, volume_mount_path: str, runpodcli_dir: str, runtime: int, git_email: str, git_name: str
+    ) -> str:
+        """Build docker args with embedded scripts (no S3 required)."""
         runpodcli_path = f"{volume_mount_path}/{runpodcli_dir}"
-        return (
-            "/bin/bash -c '"
-            + (f"mkdir -p {runpodcli_path}; bash {runpodcli_path}/start_pod.sh; sleep {max(runtime * 60, 20)}; bash {runpodcli_path}/terminate_pod.sh")
-            + "'"
-        )
+
+        # Get script contents as (name, content) tuples
+        scripts = [
+            get_setup_root(runpodcli_path, volume_mount_path),
+            get_setup_user(runpodcli_path, git_email, git_name),
+            get_start(runpodcli_path),
+            get_terminate(runpodcli_path),
+        ]
+
+        # Build a script that writes all scripts to disk and runs them
+        # Using base64 to avoid quoting issues
+        write_commands = [f"mkdir -p {runpodcli_path}"]
+        for name, content in scripts:
+            encoded = base64.b64encode(content.encode()).decode()
+            write_commands.append(f"echo {encoded} | base64 -d > {runpodcli_path}/{name}")
+
+        write_script = "; ".join(write_commands)
+        run_script = f"bash {runpodcli_path}/start_pod.sh; sleep {max(runtime * 60, 20)}; bash {runpodcli_path}/terminate_pod.sh"
+
+        return f"/bin/bash -c '{write_script}; {run_script}'"
 
     def _provision_and_wait(self, pod_id: str, n_attempts: int = 60) -> Dict:
         for _ in range(n_attempts):
@@ -215,7 +223,6 @@ class RunPodManager:
         memory: int = 16,
         num_gpus: int = 1,
         ssh_keys: Optional[str] = None,
-        update_known_hosts: bool = True,
         update_ssh_config: bool = True,
         volume_mount_path: str = "/network",
     ) -> None:
@@ -232,7 +239,6 @@ class RunPodManager:
             memory: Minimum RAM in GB (default: 16)
             ssh_keys: Path(s) to SSH public key file(s), space-separated, supports wildcards (default: use RunPod account keys)
             forward_agent: Whether to forward SSH agent (default: False)
-            update_known_hosts: Whether to update known hosts (default: True)
             update_ssh_config: Whether to update SSH config (default: True)
             image_name: Docker image (default: "PyTorch 2.8.0 with CUDA 12.8.1")
 
@@ -273,19 +279,14 @@ class RunPodManager:
 
         git_email = os.getenv("GIT_EMAIL", "")
         git_name = os.getenv("GIT_NAME", "")
-        remote_scripts_path = f"{volume_mount_path}/{runpodcli_dir}"
-        scripts = [
-            get_setup_root(remote_scripts_path, volume_mount_path),
-            get_setup_user(remote_scripts_path, git_email, git_name),
-            get_start(remote_scripts_path),
-            get_terminate(remote_scripts_path),
-        ]
-        for script_name, script_content in scripts:
-            # s3_key is relative to /volume_mount_path, while remote_scripts_path is relative to /
-            s3_key = f"{runpodcli_dir}/{script_name}"
-            self._s3.put_object(Bucket=self._network_volume_id, Key=s3_key, Body=script_content.encode("utf-8"))
 
-        docker_args = self._build_docker_args(volume_mount_path=volume_mount_path, runpodcli_dir=runpodcli_dir, runtime=runtime)
+        docker_args = self._build_docker_args(
+            volume_mount_path=volume_mount_path,
+            runpodcli_dir=runpodcli_dir,
+            runtime=runtime,
+            git_email=git_email,
+            git_name=git_name,
+        )
 
         # Set up environment variables - use provided key files or fetch from RunPod account
         if ssh_keys:
@@ -333,10 +334,6 @@ class RunPodManager:
         if update_ssh_config:
             self._write_ssh_config(ip, port, forward_agent)
 
-        if update_known_hosts:
-            time.sleep(5)
-            self._update_known_hosts_file(ip, port, runpodcli_dir)
-
     def _generate_ssh_config(self, ip: str, port: int, forward_agent: bool = False) -> str:
         return textwrap.dedent(f"""
             Host runpod
@@ -352,26 +349,6 @@ class RunPodManager:
         with open(os.path.expanduser(config_path), "w") as f:
             f.write(runpod_config)
         logging.info(f"SSH config at {config_path} updated")
-
-    def _update_known_hosts_file(self, public_ip: str, port: int, runpodcli_dir: str) -> None:
-        host_keys: List[Tuple[str, str]] = []
-        for file in ["ssh_ed25519_host_key", "ssh_ecdsa_host_key", "ssh_rsa_host_key", "ssh_dsa_host_key"]:
-            try:
-                obj = self._s3.get_object(Bucket=self._network_volume_id, Key=f"{runpodcli_dir}/{file}")
-                host_key_text = obj["Body"].read().decode("utf-8").strip()
-                alg, key, _ = host_key_text.split(" ")
-                host_keys.append((alg, key))
-            except Exception:
-                continue
-
-        known_hosts_path = os.path.expanduser("~/.ssh/known_hosts.runpod_cli")
-        for alg, key in host_keys:
-            try:
-                with open(known_hosts_path, "a") as dest:
-                    dest.write(f"# runpod cli:\n[{public_ip}]:{port} {alg} {key}\n")
-                logging.info(f"Added {alg} host key to {known_hosts_path}")
-            except Exception as e:
-                logging.error(f"Error adding host key: {e}")
 
     def pubkey(self) -> None:
         """Fetch and display SSH public keys from RunPod account.
