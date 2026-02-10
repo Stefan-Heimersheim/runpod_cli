@@ -144,3 +144,5 @@ ERROR  | Uncaught exception | <class 'TypeError'>; Inspector.__init__() missing 
 - Pre-install VS Code / Cursor server
 - Change names & ssh aliases if a user requests multiple GPUs (e.g. runpod, runpod-1, etc.)
 - Create a .config/runpod_cli/config file to change the default values (e.g. GPU type, runtime, etc.)
+- Print Pod ID after creating pod (to use in further commands)
+- If we create a new runpod with the same IP and port as in the past, should we make sure to overwrite known_hosts.runpod_cli?
