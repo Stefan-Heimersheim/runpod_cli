@@ -31,19 +31,14 @@ Install the [latest published release](https://github.com/Stefan-Heimersheim/run
 for regular use. The `main` branch may contain development changes that have not
 been released yet.
 
-First, clone the latest release tag (requires Git, curl, and Python 3):
+Clone the repository, then check out the latest release. Replace `<tag_name>`
+with the tag shown on the release page:
 
 ```bash
-release_tag=$(curl -fsSL https://api.github.com/repos/Stefan-Heimersheim/runpod_cli/releases/latest |
-  python3 -c 'import json, sys; print(json.load(sys.stdin)["tag_name"])') &&
-git clone --branch "$release_tag" --depth 1 https://github.com/Stefan-Heimersheim/runpod_cli.git &&
+git clone https://github.com/Stefan-Heimersheim/runpod_cli.git
 cd runpod_cli
+git checkout tags/<tag_name>
 ```
-
-This checks out the published tag in detached-HEAD mode, which is expected when
-installing a release. Alternatively, copy a tag from the releases page and use
-`git clone --branch <release-tag> --depth 1 https://github.com/Stefan-Heimersheim/runpod_cli.git`,
-replacing `<release-tag>` with that tag, then `cd runpod_cli`.
 
 Choose one installation method below from the cloned directory.
 
@@ -67,9 +62,6 @@ pip install -e .
 pip install -r requirements.txt
 # In this case use: python src/runpod_cli/cli.py
 ```
-
-For development, clone `main` explicitly with
-`git clone --branch main https://github.com/Stefan-Heimersheim/runpod_cli.git`.
 
 ## Configuration
 
