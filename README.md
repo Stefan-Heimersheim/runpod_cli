@@ -121,19 +121,14 @@ underscores, and hyphens. `--update_ssh_config=False` disables local config chan
 
 ## Custom pod shell settings
 
-Pass a local shell file with `rpc create --bashrc=~/.config/runpod_cli/pod.bashrc`,
-or set `RUNPOD_BASHRC=~/.config/runpod_cli/pod.bashrc` in your `.env` file.
-The command-line option takes precedence. For example, the file can contain:
+Pass a line to append to the pod user's `~/.bashrc`:
 
 ```bash
-export CLAUDE_CONFIG_DIR=/network/claude-config
-export UV_LINK_MODE=copy
+rpc create --bashrc='export UV_LINK_MODE=copy'
 ```
 
-The file is uploaded to your network volume and sourced as `user` before user
-setup (including agent installation), and from the pod user's `.bashrc` for
-interactive shells. Shell expressions such as `$HOME` expand on the pod.
-Only use shell content you trust; it is executed on the pod.
+The line is written verbatim, so shell expressions such as `$HOME` expand on
+the pod when an interactive shell starts.
 
 ## Python environment recommendations
 

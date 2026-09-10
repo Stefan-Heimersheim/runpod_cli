@@ -238,7 +238,7 @@ class RunPodManager:
             update_known_hosts: Whether to update known hosts (default: True)
             update_ssh_config: Whether to update SSH config (default: True)
             image_name: Docker image (default: "PyTorch 2.8.0 with CUDA 12.8.1")
-            bashrc: Local shell file to source during user setup and in interactive shells (default: RUNPOD_BASHRC)
+            bashrc: Line to append to the pod user's ~/.bashrc, e.g. --bashrc='export UV_LINK_MODE=copy'
             ssh_host: SSH alias to create or update, preserving other hosts (default: runpod)
 
         Example:
@@ -251,12 +251,6 @@ class RunPodManager:
             rpc create --ssh_keys="~/.ssh/*.pub"
         """
         self._validate_ssh_host(ssh_host)
-        bashrc_file = bashrc or os.getenv("RUNPOD_BASHRC")
-        bashrc_content = None
-        if bashrc_file:
-            with open(os.path.expanduser(bashrc_file), encoding="utf-8") as source:
-                bashrc_content = source.read()
-
         # Handle CPU-only pods (convert to str in case Fire passes an int like 4090)
         if gpu_type is None or str(gpu_type).upper() == "CPU":
             gpu_type_id = None
@@ -288,13 +282,10 @@ class RunPodManager:
         remote_scripts_path = f"{volume_mount_path}/{runpodcli_dir}"
         scripts = [
             get_setup_root(remote_scripts_path, volume_mount_path),
-            get_setup_user(remote_scripts_path, git_email, git_name,
-                           f"{remote_scripts_path}/custom_bashrc.sh" if bashrc_content is not None else None),
+            get_setup_user(remote_scripts_path, git_email, git_name, bashrc),
             get_start(remote_scripts_path),
             get_terminate(remote_scripts_path),
         ]
-        if bashrc_content is not None:
-            scripts.append(("custom_bashrc.sh", bashrc_content))
         for script_name, script_content in scripts:
             # s3_key is relative to /volume_mount_path, while remote_scripts_path is relative to /
             s3_key = f"{runpodcli_dir}/{script_name}"
