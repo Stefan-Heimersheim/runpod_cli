@@ -218,6 +218,7 @@ class RunPodManager:
         update_known_hosts: bool = True,
         update_ssh_config: bool = True,
         volume_mount_path: str = "/network",
+        bashrc_line: Optional[str] = None,
     ) -> None:
         """Create a new RunPod instance with the specified parameters.
 
@@ -235,6 +236,7 @@ class RunPodManager:
             update_known_hosts: Whether to update known hosts (default: True)
             update_ssh_config: Whether to update SSH config (default: True)
             image_name: Docker image (default: "PyTorch 2.8.0 with CUDA 12.8.1")
+            bashrc_line: Line to append to the pod user's ~/.bashrc, e.g. --bashrc_line='export UV_LINK_MODE=copy'
 
         Example:
             rpc create -r 60 -g "A100 SXM"
@@ -276,7 +278,7 @@ class RunPodManager:
         remote_scripts_path = f"{volume_mount_path}/{runpodcli_dir}"
         scripts = [
             get_setup_root(remote_scripts_path, volume_mount_path),
-            get_setup_user(remote_scripts_path, git_email, git_name),
+            get_setup_user(remote_scripts_path, git_email, git_name, bashrc_line),
             get_start(remote_scripts_path),
             get_terminate(remote_scripts_path),
         ]

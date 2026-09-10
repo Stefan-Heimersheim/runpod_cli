@@ -102,6 +102,17 @@ Create a dev pod with two A100 GPUs for 4 hours (adjust PCIe to SXM if needed):
 rpc create --gpu_type "A100 PCIe" --runtime 240 --gpu_count 2
 ```
 
+## Custom pod shell settings
+
+Pass a line to append to the pod user's `~/.bashrc`:
+
+```bash
+rpc create --bashrc_line='export UV_LINK_MODE=copy'
+```
+
+The line is written verbatim, so shell expressions such as `$HOME` expand on
+the pod when an interactive shell starts.
+
 ## Python environment recommendations
 
 I recommend using [virtualenv](https://virtualenv.pypa.io/en/latest/) (pre-installed on the pod)
@@ -160,7 +171,6 @@ ERROR  | Uncaught exception | <class 'TypeError'>; Inspector.__init__() missing 
 ```
 
 ## Future features & improvements
-- Allow for custom bashrc
 - Allow for persistent bash history
 - Set UV_LINK_MODE=copy or move the uv cache
 - Find a better way to wait for ssh keys to be generated than `time.sleep(5)`
