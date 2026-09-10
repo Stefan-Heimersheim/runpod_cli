@@ -2,7 +2,6 @@ import glob
 import logging
 import os
 import re
-import shlex
 import textwrap
 import time
 from datetime import datetime, timedelta, timezone
@@ -220,7 +219,6 @@ class RunPodManager:
         update_ssh_config: bool = True,
         volume_mount_path: str = "/network",
         bashrc: Optional[str] = None,
-        ssh_host: str = "runpod",
     ) -> None:
         """Create a new RunPod instance with the specified parameters.
 
@@ -239,7 +237,6 @@ class RunPodManager:
             update_ssh_config: Whether to update SSH config (default: True)
             image_name: Docker image (default: "PyTorch 2.8.0 with CUDA 12.8.1")
             bashrc: Line to append to the pod user's ~/.bashrc, e.g. --bashrc='export UV_LINK_MODE=copy'
-            ssh_host: SSH alias to create or update, preserving other hosts (default: runpod)
 
         Example:
             rpc create -r 60 -g "A100 SXM"
@@ -250,7 +247,6 @@ class RunPodManager:
             rpc create --ssh_keys="~/.ssh/id_ed25519.pub ~/.ssh/id_rsa.pub"
             rpc create --ssh_keys="~/.ssh/*.pub"
         """
-        self._validate_ssh_host(ssh_host)
         # Handle CPU-only pods (convert to str in case Fire passes an int like 4090)
         if gpu_type is None or str(gpu_type).upper() == "CPU":
             gpu_type_id = None
@@ -337,21 +333,15 @@ class RunPodManager:
         ip, port = self._get_public_ip_and_port(pod)
 
         if update_ssh_config:
-            self._write_ssh_config(ip, port, forward_agent, ssh_host=ssh_host)
+            self._write_ssh_config(ip, port, forward_agent)
 
         if update_known_hosts:
             time.sleep(5)
             self._update_known_hosts_file(ip, port, runpodcli_dir)
 
-    @staticmethod
-    def _validate_ssh_host(ssh_host: str) -> None:
-        if not isinstance(ssh_host, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", ssh_host):
-            raise ValueError("ssh_host must start with a letter or digit and contain only letters, digits, dots, underscores, or hyphens")
-
-    def _generate_ssh_config(self, ip: str, port: int, forward_agent: bool = False, ssh_host: str = "runpod") -> str:
-        self._validate_ssh_host(ssh_host)
+    def _generate_ssh_config(self, ip: str, port: int, forward_agent: bool = False, host_aliases: str = "runpod") -> str:
         return textwrap.dedent(f"""
-            Host {ssh_host}
+            Host {host_aliases}
               HostName {ip}
               User user
               Port {port}
@@ -359,36 +349,23 @@ class RunPodManager:
               {"ForwardAgent yes" if forward_agent else ""}
         """).strip()
 
-    def _write_ssh_config(self, ip: str, port: int, forward_agent: bool, config_path: str = "~/.ssh/config.runpod_cli", ssh_host: str = "runpod") -> None:
-        runpod_config = self._generate_ssh_config(ip=ip, port=port, forward_agent=forward_agent, ssh_host=ssh_host)
+    def _write_ssh_config(self, ip: str, port: int, forward_agent: bool, config_path: str = "~/.ssh/config.runpod_cli") -> None:
+        # This file is owned by runpod_cli: each pod gets a numbered alias and
+        # `runpod` always points to the most recent pod.
         path = os.path.expanduser(config_path)
         try:
             with open(path) as source:
                 existing = source.read()
         except FileNotFoundError:
             existing = ""
-        # Keep other Host/Match blocks, including aliases sharing the old entry.
-        blocks = re.split(r"(?im)^(?=[ \t]*(?:Host|Match)[ \t=])", existing)
-        preamble = blocks.pop(0)
-        retained = []
-        for block in blocks:
-            header = re.match(r"(?i)[ \t]*Host[ \t=]+([^\r\n]*)(?:\r?\n|$)", block)
-            if header:
-                aliases = shlex.split(header.group(1), comments=True)
-                others = [alias for alias in aliases if alias.lower() != ssh_host.lower()]
-                if len(others) != len(aliases):
-                    if not others:
-                        continue
-                    block = "Host " + " ".join(others) + "\n" + block[header.end():]
-            retained.append(block)
-        # Put the specific entry before any wildcard defaults (SSH uses first value).
-        contents = preamble + ("\n" if preamble and not preamble.endswith("\n") else "") + runpod_config + "\n\n" + "".join(retained)
-        os.makedirs(os.path.dirname(os.path.abspath(path)), mode=0o700, exist_ok=True)
+        existing = re.sub(r"(?m)^Host runpod$", "Host runpod0", existing)  # entry written by older versions
+        existing = re.sub(r"(?m)^Host runpod (runpod\d+)$", r"Host \1", existing)  # detach `runpod` from the previous pod
+        number = max([int(n) for n in re.findall(r"(?m)^Host runpod(\d+)$", existing)], default=0) + 1
+        entry = self._generate_ssh_config(ip=ip, port=port, forward_agent=forward_agent, host_aliases=f"runpod runpod{number}")
         with open(path, "w") as dest:
-            dest.write(contents)
-        os.chmod(path, 0o600)
+            dest.write(entry + "\n\n" + existing if existing else entry)
         logging.info(f"SSH config at {config_path} updated")
-        logging.info("Connect with: ssh %s", ssh_host)
+        logging.info(f"Connect with: ssh runpod (or: ssh runpod{number})")
 
     def _update_known_hosts_file(self, public_ip: str, port: int, runpodcli_dir: str) -> None:
         host_keys: List[Tuple[str, str]] = []
