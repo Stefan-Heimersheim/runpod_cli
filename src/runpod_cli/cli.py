@@ -12,7 +12,7 @@ import fire
 from dotenv import load_dotenv
 
 try:
-    from .api import RunPodGraphQL
+    from .api import RunPodAPIError, RunPodGraphQL
     from .utils import (
         DEFAULT_IMAGE_NAME,
         GPU_DISPLAY_NAME_TO_ID,
@@ -23,7 +23,7 @@ try:
         get_terminate,
     )
 except ImportError:
-    from api import RunPodGraphQL  # type: ignore
+    from api import RunPodAPIError, RunPodGraphQL  # type: ignore
     from utils import (  # type: ignore
         DEFAULT_IMAGE_NAME,
         GPU_DISPLAY_NAME_TO_ID,
@@ -404,7 +404,11 @@ class RunPodManager:
 
 
 def main():
-    fire.Fire(RunPodManager)
+    try:
+        fire.Fire(RunPodManager)
+    except RunPodAPIError as error:
+        logging.error("%s", error)
+        raise SystemExit(1) from None
 
 
 if __name__ == "__main__":
