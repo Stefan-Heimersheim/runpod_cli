@@ -5,49 +5,6 @@ from typing import Optional, Tuple
 # Default Docker image for pods
 DEFAULT_IMAGE_NAME = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04"
 
-# GPU display name to ID mapping from https://docs.runpod.io/references/gpu-types
-GPU_DISPLAY_NAME_TO_ID = {
-    "MI300X": "AMD Instinct MI300X OAM",
-    "A100 PCIe": "NVIDIA A100 80GB PCIe",
-    "A100 SXM": "NVIDIA A100-SXM4-80GB",
-    "A30": "NVIDIA A30",
-    "A40": "NVIDIA A40",
-    "B200": "NVIDIA B200",
-    "RTX 3070": "NVIDIA GeForce RTX 3070",
-    "RTX 3080": "NVIDIA GeForce RTX 3080",
-    "RTX 3080 Ti": "NVIDIA GeForce RTX 3080 Ti",
-    "RTX 3090": "NVIDIA GeForce RTX 3090",
-    "RTX 3090 Ti": "NVIDIA GeForce RTX 3090 Ti",
-    "RTX 4070 Ti": "NVIDIA GeForce RTX 4070 Ti",
-    "RTX 4080": "NVIDIA GeForce RTX 4080",
-    "RTX 4080 SUPER": "NVIDIA GeForce RTX 4080 SUPER",
-    "RTX 4090": "NVIDIA GeForce RTX 4090",
-    "RTX 5080": "NVIDIA GeForce RTX 5080",
-    "RTX 5090": "NVIDIA GeForce RTX 5090",
-    "H100 SXM": "NVIDIA H100 80GB HBM3",
-    "H100 NVL": "NVIDIA H100 NVL",
-    "H100 PCIe": "NVIDIA H100 PCIe",
-    "H200 SXM": "NVIDIA H200",
-    "L4": "NVIDIA L4",
-    "L40": "NVIDIA L40",
-    "L40S": "NVIDIA L40S",
-    "RTX 2000 Ada": "NVIDIA RTX 2000 Ada Generation",
-    "RTX 4000 Ada": "NVIDIA RTX 4000 Ada Generation",
-    "RTX 5000 Ada": "NVIDIA RTX 5000 Ada Generation",
-    "RTX 6000 Ada": "NVIDIA RTX 6000 Ada Generation",
-    "RTX A2000": "NVIDIA RTX A2000",
-    "RTX A4000": "NVIDIA RTX A4000",
-    "RTX A4500": "NVIDIA RTX A4500",
-    "RTX A5000": "NVIDIA RTX A5000",
-    "RTX A6000": "NVIDIA RTX A6000",
-    "RTX PRO 6000": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
-    "V100 FHHL": "Tesla V100-FHHL-16GB",
-    "Tesla V100": "Tesla V100-PCIE-16GB",
-    "V100 SXM2": "Tesla V100-SXM2-16GB",
-}
-GPU_ID_TO_DISPLAY_NAME = {v: k for k, v in GPU_DISPLAY_NAME_TO_ID.items()}
-
-
 # Shell scripts to load onto the pod
 def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, str]:
     return "setup_root.sh", textwrap.dedent(
