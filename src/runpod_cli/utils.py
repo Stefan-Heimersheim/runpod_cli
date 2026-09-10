@@ -88,11 +88,8 @@ def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, st
     )
 
 
-def get_setup_user(runpodcli_path: str, git_email: str, git_name: str, bashrc_path: Optional[str] = None) -> Tuple[str, str]:
-    bashrc_setup = ""
-    if bashrc_path:
-        source_command = f"source {shlex.quote(bashrc_path)}"
-        bashrc_setup = f'printf \'%s\\n\' {shlex.quote(source_command)} >> "$HOME/.bashrc"\n{source_command}'
+def get_setup_user(runpodcli_path: str, git_email: str, git_name: str, bashrc_line: Optional[str] = None) -> Tuple[str, str]:
+    bashrc_setup = f"echo {shlex.quote(str(bashrc_line))} >> ~/.bashrc" if bashrc_line else ""
     return "setup_user.sh", textwrap.dedent(
         r"""
         #!/bin/bash
