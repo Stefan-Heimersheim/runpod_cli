@@ -27,11 +27,29 @@ is not a change from the original runpod_cli, but worth keeping in mind.)
 
 ## Installation
 
+Install the [latest published release](https://github.com/Stefan-Heimersheim/runpod_cli/releases/latest)
+for regular use. The `main` branch may contain development changes that have not
+been released yet.
+
+First, clone the latest release tag (requires Git, curl, and Python 3):
+
+```bash
+release_tag=$(curl -fsSL https://api.github.com/repos/Stefan-Heimersheim/runpod_cli/releases/latest |
+  python3 -c 'import json, sys; print(json.load(sys.stdin)["tag_name"])') &&
+git clone --branch "$release_tag" --depth 1 https://github.com/Stefan-Heimersheim/runpod_cli.git &&
+cd runpod_cli
+```
+
+This checks out the published tag in detached-HEAD mode, which is expected when
+installing a release. Alternatively, copy a tag from the releases page and use
+`git clone --branch <release-tag> --depth 1 https://github.com/Stefan-Heimersheim/runpod_cli.git`,
+replacing `<release-tag>` with that tag, then `cd runpod_cli`.
+
+Choose one installation method below from the cloned directory.
+
 ### Option 1: Install as a `uv` tool (recommended)
 
 ```bash
-git clone https://github.com/ApolloResearch/runpod_cli.git
-cd runpod_cli
 uv tool install -e .
 uv tool update-shell   # ensure uv’s bin dir is on PATH
 # restart shell or re-source your profile
@@ -40,19 +58,18 @@ uv tool update-shell   # ensure uv’s bin dir is on PATH
 ### Option 2: Install with pip
 
 ```bash
-git clone https://github.com/ApolloResearch/runpod_cli.git
-cd runpod_cli
 pip install -e .
 ```
 
 ### Option 3: Install requirements only (not recommended, for backwards compatibility)
 
 ```bash
-git clone https://github.com/ApolloResearch/runpod_cli.git
-cd runpod_cli
 pip install -r requirements.txt
 # In this case use: python src/runpod_cli/cli.py
 ```
+
+For development, clone `main` explicitly with
+`git clone --branch main https://github.com/Stefan-Heimersheim/runpod_cli.git`.
 
 ## Configuration
 
