@@ -408,7 +408,7 @@ def main():
         fire.Fire(RunPodManager)
     except RunPodAPIError as error:
         logging.error("%s", error)
-        raise SystemExit(1) from None
+        raise SystemExit(error.exit_code) from None
 
 
 if __name__ == "__main__":
