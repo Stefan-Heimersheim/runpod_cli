@@ -8,10 +8,10 @@ from typing import Dict, List, Optional, Tuple
 
 import boto3
 import fire
-import requests
 from dotenv import load_dotenv
 
 try:
+    from .api import RunPodGraphQL
     from .utils import (
         DEFAULT_IMAGE_NAME,
         GPU_DISPLAY_NAME_TO_ID,
@@ -22,6 +22,7 @@ try:
         get_terminate,
     )
 except ImportError:
+    from api import RunPodGraphQL  # type: ignore
     from utils import (  # type: ignore
         DEFAULT_IMAGE_NAME,
         GPU_DISPLAY_NAME_TO_ID,
@@ -34,24 +35,6 @@ except ImportError:
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(asctime)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 
-import runpod  # noqa: E402
-
-
-def get_region_from_volume_id(volume_id: str) -> str:
-    api_key = os.getenv("RUNPOD_API_KEY")
-    url = f"https://rest.runpod.io/v1/networkvolumes/{volume_id}"
-    headers = {"Authorization": f"Bearer {api_key}"}
-    response = requests.get(url, headers=headers)
-    if response.status_code != 200:
-        raise ValueError(f"Failed to get volume info: {response.text}")
-    volume_info = response.json()
-    return volume_info.get("dataCenterId")
-
-
-def get_s3_endpoint_from_volume_id(volume_id: str) -> str:
-    data_center_id = get_region_from_volume_id(volume_id)
-    s3_endpoint = f"https://s3api-{data_center_id.lower()}.runpod.io/"
-    return s3_endpoint
 
 
 def getenv(key: str) -> str:
@@ -96,12 +79,13 @@ class RunPodManager:
                 raise FileExistsError(f"Multiple .env files found in {env_paths}")
             load_dotenv(override=True, dotenv_path=os.path.expanduser(env_paths[env_exists.index(True)]))
 
-        runpod.api_key = getenv("RUNPOD_API_KEY")
+        self._api = RunPodGraphQL(getenv("RUNPOD_API_KEY"))
         self._network_volume_id: str = getenv("RUNPOD_NETWORK_VOLUME_ID")
         s3_access_key_id = getenv("RUNPOD_S3_ACCESS_KEY_ID")
         s3_secret_key = getenv("RUNPOD_S3_SECRET_KEY")
-        self._region = get_region_from_volume_id(self._network_volume_id)
-        s3_endpoint_url = get_s3_endpoint_from_volume_id(self._network_volume_id)
+        volume_info = self._api.get_network_volume(self._network_volume_id)
+        self._region = volume_info["dataCenterId"]
+        s3_endpoint_url = f"https://s3api-{self._region.lower()}.runpod.io/"
         self._s3 = boto3.client(
             "s3",
             aws_access_key_id=s3_access_key_id,
@@ -120,7 +104,7 @@ class RunPodManager:
 
     def _provision_and_wait(self, pod_id: str, n_attempts: int = 60) -> Dict:
         for _ in range(n_attempts):
-            pod = runpod.get_pod(pod_id)
+            pod = self._api.get_pod(pod_id)
             pod_runtime = pod.get("runtime")
             if pod_runtime is None or not pod_runtime.get("ports"):
                 time.sleep(5)
@@ -190,7 +174,7 @@ class RunPodManager:
 
         Displays information about each pod including ID, name, GPU type, status, and connection details.
         """
-        pods = runpod.get_pods()  # type: ignore
+        pods = self._api.get_pods()
 
         for i, pod in enumerate(pods):
             logging.info(f"Pod {i + 1}:")
@@ -275,7 +259,7 @@ class RunPodManager:
 
         docker_args = self._build_docker_args(volume_mount_path=volume_mount_path, runpodcli_dir=runpodcli_dir, runtime=runtime)
 
-        pod = runpod.create_pod(
+        pod = self._api.create_pod(
             name=name,
             image_name=image_name,
             gpu_type_id=gpu_id,
@@ -350,7 +334,7 @@ class RunPodManager:
             rpc terminate --pod_id=abc123
         """
         logging.info(f"Terminating pod {pod_id}")
-        _ = runpod.terminate_pod(pod_id)
+        self._api.terminate_pod(pod_id)
 
 
 def main():
