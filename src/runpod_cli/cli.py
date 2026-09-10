@@ -1,3 +1,4 @@
+import glob
 import logging
 import os
 import re
@@ -79,7 +80,7 @@ class RunPodManager:
                 raise FileExistsError(f"Multiple .env files found in {env_paths}")
             load_dotenv(override=True, dotenv_path=os.path.expanduser(env_paths[env_exists.index(True)]))
 
-        self._api = RunPodGraphQL(getenv("RUNPOD_API_KEY"))
+        self._api = RunPodGraphQL(getenv("RUNPOD_API_KEY"), team_id=os.getenv("RUNPOD_TEAM_ID"))
         self._network_volume_id: str = getenv("RUNPOD_NETWORK_VOLUME_ID")
         s3_access_key_id = getenv("RUNPOD_S3_ACCESS_KEY_ID")
         s3_secret_key = getenv("RUNPOD_S3_SECRET_KEY")
@@ -191,17 +192,29 @@ class RunPodManager:
                     logging.info(f"  {key}: {pod.get(key)}")
             logging.info("")
 
+    def teams(self) -> None:
+        """List teams you belong to, showing team IDs for use with RUNPOD_TEAM_ID."""
+        teams = self._api.get_teams()
+        if not teams:
+            logging.info("You are not a member of any teams.")
+            return
+        for team in teams:
+            logging.info(f"Team: {team.get('name')}")
+            logging.info(f"  ID: {team.get('id')}")
+            logging.info("")
+
     def create(
         self,
         name: Optional[str] = None,
         runtime: int = 60,
-        gpu_type: str = "RTX A4000",
-        cpus: int = 1,
-        disk: int = 30,
+        gpu_type: Optional[str] = "RTX A4000",
+        cpus: int = 2,
+        disk: int = 20,
         forward_agent: bool = False,
         image_name: str = DEFAULT_IMAGE_NAME,
-        memory: int = 1,
+        memory: int = 16,
         num_gpus: int = 1,
+        ssh_keys: Optional[str] = None,
         update_known_hosts: bool = True,
         update_ssh_config: bool = True,
         volume_mount_path: str = "/network",
@@ -210,13 +223,14 @@ class RunPodManager:
 
         Args:
             runtime: Time in minutes for pod to run (default: 60)
-            gpu_type: GPU type (default: "RTX A4000")
+            gpu_type: GPU type, or "CPU" for CPU-only pod (default: "RTX A4000")
             num_gpus: Number of GPUs (default: 1)
             name: Name for the pod (default: "$USER-$GPU_TYPE")
             env: Path to credentials .env (defalt: .env and ~/.config/runpod_cli/.env)
-            disk: Container disk size in GB (default: 30)
-            cpus: Minimum CPU count (default: 1)
-            memory: Minimum RAM in GB (default: 1)
+            disk: Container disk size in GB (default: 20, max 20 for CPU pods)
+            cpus: Minimum vCPU count (default: 2)
+            memory: Minimum RAM in GB (default: 16)
+            ssh_keys: Path(s) to SSH public key file(s), space-separated, supports wildcards (default: use RunPod account keys)
             forward_agent: Whether to forward SSH agent (default: False)
             update_known_hosts: Whether to update known hosts (default: True)
             update_ssh_config: Whether to update SSH config (default: True)
@@ -225,9 +239,20 @@ class RunPodManager:
         Example:
             rpc create -r 60 -g "A100 SXM"
             rpc create --gpu_type="RTX A4000" --runtime=480
+            rpc create --gpu_type=CPU
+            rpc create --gpu_type=CPU --cpus=8 --memory=64
+            rpc create --ssh_keys=~/.ssh/id_ed25519.pub
+            rpc create --ssh_keys="~/.ssh/id_ed25519.pub ~/.ssh/id_rsa.pub"
+            rpc create --ssh_keys="~/.ssh/*.pub"
         """
-        gpu_id, gpu_name = self._get_gpu_id(gpu_type)
-        name = name or f"{os.getenv('USER')}-{gpu_name}"
+        # Handle CPU-only pods (convert to str in case Fire passes an int like 4090)
+        if gpu_type is None or str(gpu_type).upper() == "CPU":
+            gpu_type_id = None
+            gpu_display_name = "CPU"
+        else:
+            gpu_type_id, gpu_display_name = self._get_gpu_id(str(gpu_type))
+
+        name = name or f"{os.getenv('USER')}-{gpu_display_name}"
         runpodcli_dir = f".tmp_{name.replace(' ', '_')}"
 
         logging.info("Creating pod with:")
@@ -235,11 +260,14 @@ class RunPodManager:
         logging.info(f"  Image: {image_name}")
         logging.info(f"  Network volume ID: {self._network_volume_id}")
         logging.info(f"  Region: {self._region}")
-        logging.info(f"  GPU Type: {gpu_type}")
-        logging.info(f"  GPU Count: {num_gpus}")
-        logging.info(f"  Disk: {disk} GB")
-        logging.info(f"  Min CPU: {cpus}")
+        if gpu_type_id:
+            logging.info(f"  GPU Type: {gpu_display_name}")
+            logging.info(f"  GPU Count: {num_gpus}")
+        else:
+            logging.info(f"  CPU-only pod")
+        logging.info(f"  Min vCPU: {cpus}")
         logging.info(f"  Min Memory: {memory} GB")
+        logging.info(f"  Disk: {min(disk, 20) if not gpu_type_id else disk} GB")
         logging.info(f"  runpodcli directory: {runpodcli_dir}")
         logging.info(f"  Time limit: {runtime} minutes")
 
@@ -259,11 +287,31 @@ class RunPodManager:
 
         docker_args = self._build_docker_args(volume_mount_path=volume_mount_path, runpodcli_dir=runpodcli_dir, runtime=runtime)
 
+        # Set up environment variables - use provided key files or fetch from RunPod account
+        if ssh_keys:
+            # Read SSH keys from file(s) - supports wildcards and space-separated paths
+            key_contents = []
+            key_files = []
+            for pattern in ssh_keys.split():
+                pattern = os.path.expanduser(pattern.strip())
+                paths = glob.glob(pattern)
+                if not paths:
+                    raise FileNotFoundError(f"No files matching: {pattern}")
+                for path in sorted(paths):
+                    with open(path) as f:
+                        key_contents.append(f.read().strip())
+                    key_files.append(path)
+            logging.info(f"Using SSH keys from: {', '.join(key_files)}")
+            public_keys = "\n".join(key_contents)
+        else:
+            logging.info("Using SSH keys from RunPod account")
+            public_keys = self._api.get_pub_key()
+        env = {"PUBLIC_KEY": public_keys} if public_keys else None
+
         pod = self._api.create_pod(
             name=name,
             image_name=image_name,
-            gpu_type_id=gpu_id,
-            cloud_type="SECURE",
+            gpu_type_id=gpu_type_id,
             gpu_count=num_gpus,
             container_disk_in_gb=disk,
             min_vcpu_count=cpus,
@@ -272,6 +320,7 @@ class RunPodManager:
             ports="8888/http,22/tcp",
             volume_mount_path=volume_mount_path,
             network_volume_id=self._network_volume_id,
+            env=env,
         )
 
         pod_id: str = pod.get("id")  # type: ignore
@@ -324,17 +373,34 @@ class RunPodManager:
             except Exception as e:
                 logging.error(f"Error adding host key: {e}")
 
-    def terminate(self, pod_id: str) -> None:
-        """Terminate a specific RunPod instance.
-
-        Args:
-            pod_id: ID of the pod to terminate
+    def pubkey(self) -> None:
+        """Fetch and display SSH public keys from RunPod account.
 
         Example:
-            rpc terminate --pod_id=abc123
+            rpc pubkey
         """
-        logging.info(f"Terminating pod {pod_id}")
-        self._api.terminate_pod(pod_id)
+        pub_key = self._api.get_pub_key()
+        if pub_key:
+            print(pub_key)
+        else:
+            logging.info("No public keys found in RunPod account")
+
+    def terminate(self, *pod_ids: str) -> None:
+        """Terminate one or more RunPod instances.
+
+        Args:
+            pod_ids: IDs of the pods to terminate (space-separated)
+
+        Example:
+            rpc terminate abc123
+            rpc terminate abc123 def456 ghi789
+        """
+        if not pod_ids:
+            logging.error("No pod IDs provided")
+            return
+        for pod_id in pod_ids:
+            logging.info(f"Terminating pod {pod_id}")
+            self._api.terminate_pod(pod_id)
 
 
 def main():
