@@ -1,11 +1,22 @@
 """GraphQL API client for RunPod."""
 
-import json
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
 RUNPOD_GRAPHQL_URL = "https://api.runpod.io/graphql"
+
+
+class RunPodAPIError(RuntimeError):
+    """An expected API failure that can be shown directly to CLI users."""
+
+    exit_code = 1
+
+
+class RunPodCapacityError(RunPodAPIError):
+    """No matching instances are currently available; callers may retry later."""
+
+    exit_code = 75
 
 # CPU instance types: (instance_id, vcpus, memory_gb)
 # Flavors: m = 8GB/vCPU, g = 4GB/vCPU, c = 2GB/vCPU
@@ -66,10 +77,14 @@ class RunPodGraphQL:
             payload["variables"] = variables
         response = requests.post(RUNPOD_GRAPHQL_URL, headers=self._headers, json=payload)
         if response.status_code != 200:
-            raise RuntimeError(f"RunPod GraphQL error ({response.status_code}): {response.text}")
+            raise RunPodAPIError(f"RunPod API error ({response.status_code}): {response.text}")
         result = response.json()
-        if "errors" in result:
-            raise RuntimeError(f"RunPod GraphQL error: {json.dumps(result['errors'])}")
+        if result.get("errors"):
+            messages = [error.get("message", "Unknown API error") for error in result["errors"]]
+            capacity_message = "there are no longer any instances available with the requested specifications"
+            if all(message.lower().startswith(capacity_message) for message in messages):
+                raise RunPodCapacityError("; ".join(messages))
+            raise RunPodAPIError("; ".join(messages))
         return result.get("data", {})
 
     def get_pods(self) -> List[Dict]:

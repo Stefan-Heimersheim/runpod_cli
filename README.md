@@ -128,7 +128,31 @@ and `uv pip install` will ignore system packages and reinstall dependencies
 into the environment.
 
 
+## Retrying when no pods are available
+
+If RunPod reports that no instances match the requested specifications, `rpc`
+prints the error without a traceback and exits with code **75**. Other RunPod API
+errors exit with code **1**. Exit code 75 means a later attempt may succeed; it
+does not guarantee capacity will become available.
+
+This Bash example retries only the no-capacity error, up to ten attempts:
+
+```bash
+for attempt in {1..10}; do
+    if rpc create --gpu_type=5090; then
+        break
+    else
+        status=$?
+    fi
+    if [ "$status" -ne 75 ] || [ "$attempt" -eq 10 ]; then
+        exit "$status"
+    fi
+    sleep 30
+done
+```
+
 ## Known issues
+
 Python Fire has a known issue (fixed & merged on [GitHub](https://github.com/google/python-fire/pull/588/files) but not released on PyPI yet)
 with ipython>=9.0 which will produce the following error:
 ```
