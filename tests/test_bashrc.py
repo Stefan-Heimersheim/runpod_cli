@@ -36,6 +36,6 @@ def test_cli_embeds_line_in_setup_script():
     manager._network_volume_id = "vol"
     manager._region = "EU"
     with pytest.raises(RuntimeError, match="stop before provisioning"):
-        manager.create(gpu_type="CPU", name="test", bashrc="export CUSTOM_TEST=1")
+        manager.create(gpu_type="CPU", name="test", bashrc_line="export CUSTOM_TEST=1")
     uploads = {call.kwargs["Key"]: call.kwargs["Body"] for call in manager._s3.put_object.call_args_list}
     assert b"echo 'export CUSTOM_TEST=1' >> ~/.bashrc" in uploads[".tmp_test/setup_user.sh"]

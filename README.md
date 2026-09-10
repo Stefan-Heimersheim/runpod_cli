@@ -107,7 +107,7 @@ rpc create --gpu_type "A100 PCIe" --runtime 240 --gpu_count 2
 Pass a line to append to the pod user's `~/.bashrc`:
 
 ```bash
-rpc create --bashrc='export UV_LINK_MODE=copy'
+rpc create --bashrc_line='export UV_LINK_MODE=copy'
 ```
 
 The line is written verbatim, so shell expressions such as `$HOME` expand on
