@@ -99,16 +99,9 @@ def get_setup_user(runpodcli_path: str, git_email: str, git_name: str) -> Tuple[
         git config --global user.name "GIT_NAME"
         git config --global init.defaultBranch main
 
-        # Install Node.js and npm packages
-        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-        export NVM_DIR="$HOME/.nvm"
-        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-        [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
-        nvm install 22
-        nvm use 22
         # Install Claude Code and Codex
-        npm install -g @anthropic-ai/claude-code
-        npm install -g @openai/codex
+        curl -fsSL https://claude.ai/install.sh | bash
+        curl -fsSL https://chatgpt.com/codex/install.sh | sh
 
         # Install gh
         (type -p wget >/dev/null || (sudo apt update && sudo apt-get install wget -y)) \
