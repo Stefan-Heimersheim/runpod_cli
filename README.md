@@ -102,6 +102,23 @@ Create a dev pod with two A100 GPUs for 4 hours (adjust PCIe to SXM if needed):
 rpc create --gpu_type "A100 PCIe" --runtime 240 --gpu_count 2
 ```
 
+## Multiple pod SSH hosts
+
+Give each pod its own SSH alias to keep connections to existing pods:
+
+```bash
+rpc create --ssh_host=training
+rpc create --ssh_host=analysis
+ssh training
+ssh analysis
+```
+
+Use the `Include ~/.ssh/config.runpod_cli` configuration described above.
+Creating a pod with an existing alias updates only that alias; other entries are
+preserved. Without `--ssh_host`, the alias remains `runpod` and points to the
+latest pod created with that default. Alias names accept letters, digits, dots,
+underscores, and hyphens. `--update_ssh_config=False` disables local config changes.
+
 ## Custom pod shell settings
 
 Pass a local shell file with `rpc create --bashrc=~/.config/runpod_cli/pod.bashrc`,
@@ -181,5 +198,4 @@ ERROR  | Uncaught exception | <class 'TypeError'>; Inspector.__init__() missing 
 - Find a better way to wait for ssh keys to be generated than `time.sleep(5)`
 - Allow user to configre an SSH_PUBLIC_KEY_PATH in .env
 - Pre-install VS Code / Cursor server
-- Change names & ssh aliases if a user requests multiple GPUs (e.g. runpod, runpod-1, etc.)
 - Create a .config/runpod_cli/config file to change the default values (e.g. GPU type, runtime, etc.)
