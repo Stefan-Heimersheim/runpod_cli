@@ -72,8 +72,10 @@ def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, st
         fi
 
         apt-get update
+        # Make frequently used tools available before the remaining setup.
+        apt-get install -y tmux git rsync
         apt-get upgrade -y
-        apt-get install -y sudo git vim ssh net-tools htop curl zip unzip tmux rsync libopenmpi-dev iputils-ping make fzf restic ripgrep wget pandoc poppler-utils pigz bzip2 nano locales
+        apt-get install -y sudo vim ssh net-tools htop curl zip unzip libopenmpi-dev iputils-ping make fzf restic ripgrep wget pandoc poppler-utils pigz bzip2 nano locales
         echo 'user ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
         echo "export HF_HOME=/workspace/hf_home/" >> /home/user/.bashrc
         echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/user/.bashrc
