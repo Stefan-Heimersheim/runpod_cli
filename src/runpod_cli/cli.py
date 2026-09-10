@@ -350,22 +350,19 @@ class RunPodManager:
         """).strip()
 
     def _write_ssh_config(self, ip: str, port: int, forward_agent: bool, config_path: str = "~/.ssh/config.runpod_cli") -> None:
-        # This file is owned by runpod_cli: each pod gets a numbered alias and
-        # `runpod` always points to the most recent pod.
+        # Each pod gets its own numbered config file; the main file only
+        # accumulates Include lines, so nothing is ever read back or rewritten.
         path = os.path.expanduser(config_path)
-        try:
-            with open(path) as source:
-                existing = source.read()
-        except FileNotFoundError:
-            existing = ""
-        existing = re.sub(r"(?m)^Host runpod$", "Host runpod0", existing)  # entry written by older versions
-        existing = re.sub(r"(?m)^Host runpod (runpod\d+)$", r"Host \1", existing)  # detach `runpod` from the previous pod
-        number = max([int(n) for n in re.findall(r"(?m)^Host runpod(\d+)$", existing)], default=0) + 1
-        entry = self._generate_ssh_config(ip=ip, port=port, forward_agent=forward_agent, host_aliases=f"runpod runpod{number}")
-        with open(path, "w") as dest:
-            dest.write(entry + "\n\n" + existing if existing else entry)
+        numbers = [int(suffix) for name in glob.glob(f"{path}.*") if (suffix := name.rsplit(".", 1)[1]).isdigit()]
+        number = max(numbers, default=0) + 1
+        host_aliases = f"runpod runpod{number}" if number == 1 else f"runpod{number}"
+        with open(f"{path}.{number}", "w") as dest:
+            dest.write(self._generate_ssh_config(ip=ip, port=port, forward_agent=forward_agent, host_aliases=host_aliases))
+        # "w" on the first pod also clears any entry written by older versions
+        with open(path, "w" if number == 1 else "a") as dest:
+            dest.write(f"Include {config_path}.{number}\n")
         logging.info(f"SSH config at {config_path} updated")
-        logging.info(f"Connect with: ssh runpod (or: ssh runpod{number})")
+        logging.info(f"Connect with: ssh runpod{number}" + (" (alias: ssh runpod)" if number == 1 else ""))
 
     def _update_known_hosts_file(self, public_ip: str, port: int, runpodcli_dir: str) -> None:
         host_keys: List[Tuple[str, str]] = []

@@ -104,19 +104,20 @@ rpc create --gpu_type "A100 PCIe" --runtime 240 --gpu_count 2
 
 ## Multiple pod SSH hosts
 
-Each pod gets a numbered SSH alias (`runpod1`, `runpod2`, ...) in
-`~/.ssh/config.runpod_cli`, and `runpod` always points to the most recent pod:
+Each pod gets a numbered SSH alias: pod N is written to its own file
+`~/.ssh/config.runpod_cli.N` as `runpodN`, and `~/.ssh/config.runpod_cli`
+just includes these files. `runpod` is an extra alias for the first pod:
 
 ```bash
 rpc create
 rpc create
-ssh runpod1  # first pod
-ssh runpod   # most recent pod (same as runpod2)
+ssh runpod1  # first pod (also: ssh runpod)
+ssh runpod2  # second pod
 ```
 
-Use the `Include ~/.ssh/config.runpod_cli` configuration described above. The
-file is fully managed by runpod_cli, so manual edits to it may be overwritten.
-`--update_ssh_config=False` disables local config changes.
+Use the `Include ~/.ssh/config.runpod_cli` configuration described above.
+These files are fully managed by runpod_cli, so manual edits may be
+overwritten. `--update_ssh_config=False` disables local config changes.
 
 ## Custom pod shell settings
 
