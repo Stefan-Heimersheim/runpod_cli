@@ -123,7 +123,7 @@ file is fully managed by runpod_cli, so manual edits to it may be overwritten.
 Pass a line to append to the pod user's `~/.bashrc`:
 
 ```bash
-rpc create --bashrc='export UV_LINK_MODE=copy'
+rpc create --bashrc_line='export UV_LINK_MODE=copy'
 ```
 
 The line is written verbatim, so shell expressions such as `$HOME` expand on
