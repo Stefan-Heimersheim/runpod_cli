@@ -28,16 +28,12 @@ is not a change from the original runpod_cli, but worth keeping in mind.)
 ## Installation
 
 Install the [latest published release](https://github.com/Stefan-Heimersheim/runpod_cli/releases/latest)
-for regular use. The `main` branch may contain development changes that have not
-been released yet.
-
-Clone the repository, then check out the latest release. Replace `<tag_name>`
-with the tag shown on the release page:
+for regular use; the `latest` tag always points to it. The `main` branch may
+contain development changes that have not been released yet.
 
 ```bash
-git clone https://github.com/Stefan-Heimersheim/runpod_cli.git
+git clone --branch latest https://github.com/Stefan-Heimersheim/runpod_cli.git
 cd runpod_cli
-git checkout tags/<tag_name>
 ```
 
 Choose one installation method below from the cloned directory.
