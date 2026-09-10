@@ -1,13 +1,10 @@
 """GraphQL API client for RunPod."""
 
+import logging
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
-
-try:
-    from .catalog import get_gpu_types, valid_gpu_types
-except ImportError:
-    from catalog import get_gpu_types, valid_gpu_types  # type: ignore
 
 RUNPOD_GRAPHQL_URL = "https://api.runpod.io/graphql"
 RUNPOD_GPU_CATALOG_URL = "https://api.runpod.io/v2/catalog/gpus"
@@ -93,11 +90,10 @@ class RunPodGraphQL:
             raise RunPodAPIError("; ".join(messages))
         return result.get("data", {})
 
-    def get_gpu_types(self, refresh: bool = False) -> Dict[str, str]:
-        """Return current GPU IDs mapped to display names, with a local disk cache."""
-        return get_gpu_types(self._fetch_gpu_types, refresh=refresh)
-
-    def _fetch_gpu_types(self) -> Dict[str, str]:
+    def get_gpu_types(self) -> Dict[str, str]:
+        """Fetch current GPU IDs mapped to display names from the REST v2 catalog."""
+        logging.info(f"Fetching GPU catalog: GET {RUNPOD_GPU_CATALOG_URL} ...")
+        start = time.monotonic()
         try:
             response = requests.get(RUNPOD_GPU_CATALOG_URL, headers=self._headers, timeout=10)
         except requests.RequestException as error:
@@ -105,12 +101,12 @@ class RunPodGraphQL:
         if response.status_code != 200:
             raise RunPodAPIError(f"GPU catalog request failed (HTTP {response.status_code}). Check your RunPod API key and retry.")
         try:
-            rows = response.json()["gpus"]
-            gpu_types = {gpu["id"]: gpu["name"] for gpu in rows}
-            if not valid_gpu_types(gpu_types):
+            gpu_types = {gpu["id"]: gpu["name"] for gpu in response.json()["gpus"]}
+            if not gpu_types or not all(key.strip() and isinstance(name, str) and name.strip() for key, name in gpu_types.items()):
                 raise ValueError("Empty or invalid GPU catalog")
-        except (ValueError, KeyError, TypeError) as error:
+        except (ValueError, KeyError, TypeError, AttributeError) as error:
             raise RunPodAPIError("RunPod returned an invalid GPU catalog") from error
+        logging.info(f"...fetched {len(gpu_types)} GPU types in {time.monotonic() - start:.1f}s")
         return gpu_types
 
     def get_pods(self) -> List[Dict]:

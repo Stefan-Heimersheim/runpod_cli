@@ -149,22 +149,20 @@ class RunPodManager:
         query = str(gpu_type).strip().lower()
         if not query:
             raise ValueError("GPU type must not be empty")
-        for refresh in (False, True):
-            gpu_types = self._api.get_gpu_types(refresh=refresh)
-            # Exact IDs/names take precedence over substring matches.
-            matches = [gpu_id for gpu_id, name in gpu_types.items() if query in (gpu_id.lower(), name.lower())]
-            if not matches:
-                matches = [gpu_id for gpu_id, name in gpu_types.items() if query in gpu_id.lower() or query in name.lower()]
-            if len(matches) == 1:
-                return matches[0], gpu_types[matches[0]]
-            if len(matches) > 1:
-                raise ValueError(f"Ambiguous GPU type: {gpu_type} matches {matches}. Use a full name or ID from rpc gpus.")
-            # A newly released GPU may be missing from the local cache.
+        gpu_types = self._api.get_gpu_types()
+        # Exact IDs/names take precedence over substring matches.
+        matches = [gpu_id for gpu_id, name in gpu_types.items() if query in (gpu_id.lower(), name.lower())]
+        if not matches:
+            matches = [gpu_id for gpu_id, name in gpu_types.items() if query in gpu_id.lower() or query in name.lower()]
+        if len(matches) == 1:
+            return matches[0], gpu_types[matches[0]]
+        if len(matches) > 1:
+            raise ValueError(f"Ambiguous GPU type: {gpu_type} matches {matches}. Use a full name or ID from rpc gpus.")
         raise ValueError(f"Unknown GPU type: {gpu_type}. Use rpc gpus to list GPU names and IDs.")
 
-    def gpus(self, refresh: bool = False) -> None:
-        """List GPU names and IDs. Use --refresh to bypass the local catalog cache."""
-        for gpu_id, name in sorted(self._api.get_gpu_types(refresh=refresh).items()):
+    def gpus(self) -> None:
+        """List GPU names and IDs from RunPod's catalog."""
+        for gpu_id, name in sorted(self._api.get_gpu_types().items()):
             print(f"{name}\t{gpu_id}")
 
     def list(self, verbose: bool = False) -> None:
