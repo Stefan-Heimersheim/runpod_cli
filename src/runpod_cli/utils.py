@@ -1,5 +1,6 @@
 import textwrap
-from typing import Tuple
+import shlex
+from typing import Optional, Tuple
 
 # Default Docker image for pods
 DEFAULT_IMAGE_NAME = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04"
@@ -87,7 +88,11 @@ def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, st
     )
 
 
-def get_setup_user(runpodcli_path: str, git_email: str, git_name: str) -> Tuple[str, str]:
+def get_setup_user(runpodcli_path: str, git_email: str, git_name: str, bashrc_path: Optional[str] = None) -> Tuple[str, str]:
+    bashrc_setup = ""
+    if bashrc_path:
+        source_command = f"source {shlex.quote(bashrc_path)}"
+        bashrc_setup = f'printf \'%s\\n\' {shlex.quote(source_command)} >> "$HOME/.bashrc"\n{source_command}'
     return "setup_user.sh", textwrap.dedent(
         r"""
         #!/bin/bash
@@ -95,6 +100,8 @@ def get_setup_user(runpodcli_path: str, git_email: str, git_name: str) -> Tuple[
         echo "=== $(date -Iseconds) setup_user.sh ==="
 
         echo "Setting up user environment..."
+
+        CUSTOM_BASHRC_SETUP
 
         # Git configuration
         git config --global user.email "GIT_EMAIL"
@@ -129,6 +136,7 @@ def get_setup_user(runpodcli_path: str, git_email: str, git_name: str) -> Tuple[
     """.replace("RUNPODCLI_PATH", runpodcli_path)
         .replace("GIT_EMAIL", git_email)
         .replace("GIT_NAME", git_name)
+        .replace("CUSTOM_BASHRC_SETUP", bashrc_setup)
     )
 
 
