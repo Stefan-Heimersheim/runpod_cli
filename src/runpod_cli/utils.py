@@ -128,6 +128,7 @@ def get_setup_user(
         echo 'PROMPT_COMMAND="history -a; $PROMPT_COMMAND"' >> ~/.bashrc
         echo 'export CLAUDE_CONFIG_DIR=/workspace/.claude_LOCAL_USER' >> ~/.bashrc
         echo 'export CODEX_HOME=/workspace/.codex_LOCAL_USER' >> ~/.bashrc
+        mkdir -p /workspace/.claude_LOCAL_USER /workspace/.codex_LOCAL_USER  # Codex warns when CODEX_HOME is missing
         # uv cannot hardlink from its container-disk cache into venvs on the
         # network volume; default to copying instead of warning every install.
         echo 'export UV_LINK_MODE=copy' >> ~/.bashrc
