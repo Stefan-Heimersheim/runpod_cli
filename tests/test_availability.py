@@ -58,13 +58,18 @@ def test_check_can_be_disabled():
         manager.create(gpu_type="A4000", name="test", check_availability=False)
 
 
-def test_gpus_availability_columns(capsys):
+def test_gpus_availability_hides_gpus_without_datacenter_stock(capsys):
     manager = make_manager([gpu_entry(availability="LOW", dataCenters=[{"id": "EU-RO-1", "availability": "HIGH"}]),
+                            {"id": "NVIDIA L4", "name": "L4", "availability": "LOW",
+                             "dataCenters": [{"id": "EU-RO-1", "availability": "LOW"}]},
                             {"id": "NVIDIA B200", "name": "B200", "availability": "NONE"}])
     manager.gpus(availability=True)
     out = capsys.readouterr().out
-    assert "RTX A4000\tNVIDIA RTX A4000\tLOW\tEU-RO-1:HIGH" in out
-    assert "B200\tNVIDIA B200\tNONE\tEU-RO-1:?" in out
+    # B200 has no stock data for the volume's datacenter, so it is not shown
+    assert "B200" not in out
+    # columns are space-aligned to the longest visible value
+    assert out == ("L4         NVIDIA L4         LOW  EU-RO-1:LOW\n"
+                   "RTX A4000  NVIDIA RTX A4000  LOW  EU-RO-1:HIGH\n")
 
 
 def test_gpus_default_output_is_unchanged(capsys):
