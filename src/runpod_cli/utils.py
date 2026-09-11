@@ -49,11 +49,7 @@ def get_install(runpodcli_path: str) -> Tuple[str, str]:
 
         echo "Installing agents, system packages, and tools..."
 
-        # Urgent tools first. Try without the slow apt-get update: it fails
-        # fast when the image ships no package lists, and skips minutes of
-        # mirror fetches when it does ship them.
-        apt-get install -y tmux git rsync curl sudo \
-            || { apt-get update && apt-get install -y tmux git rsync curl sudo; }
+        apt-get install -y tmux git rsync curl sudo || { apt-get update && apt-get install -y tmux git rsync curl sudo; }
 
         # Install Claude Code and Codex for the pod user next (they install
         # into ~/.local), so agents are usable before the slower apt work
