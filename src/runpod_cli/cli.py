@@ -423,8 +423,10 @@ class RunPodManager:
 
         ip, port = self._get_public_ip_and_port(pod)
 
+        connect = f"ssh -p {port} ubuntu@{ip}"
         if update_ssh_config:
-            self._write_ssh_config(ip, port, forward_agent)
+            number = self._write_ssh_config(ip, port, forward_agent)
+            connect = f"ssh runpod (or: ssh runpod{number})"
 
         if update_known_hosts:
             if public_keys:
@@ -432,6 +434,7 @@ class RunPodManager:
             else:
                 # start_pod.sh only generates host keys when PUBLIC_KEY is set
                 logging.info("No SSH public keys, skipping known_hosts update")
+        logging.info(f"Done! Connect with: {connect}")
 
     def _generate_ssh_config(self, ip: str, port: int, forward_agent: bool = False, host_aliases: str = "runpod") -> str:
         return textwrap.dedent(f"""
@@ -443,7 +446,7 @@ class RunPodManager:
               {"ForwardAgent yes" if forward_agent else ""}
         """).strip()
 
-    def _write_ssh_config(self, ip: str, port: int, forward_agent: bool, config_path: str = "~/.ssh/config.runpod_cli") -> None:
+    def _write_ssh_config(self, ip: str, port: int, forward_agent: bool, config_path: str = "~/.ssh/config.runpod_cli") -> int:
         # Each pod gets its own numbered config file and `runpod` lives in its
         # own default file; the main file only accumulates Include lines, so
         # nothing is ever read back.
@@ -459,8 +462,7 @@ class RunPodManager:
             if number == 1:
                 dest.write(f"Include {config_path}.default\n")
             dest.write(f"Include {config_path}.{number}\n")
-        logging.info(f"SSH config at {config_path} updated")
-        logging.info(f"Connect with: ssh runpod (or: ssh runpod{number})")
+        return number
 
     def _cleanup_scripts_dirs(self) -> None:
         """Delete leftover .tmp_* script directories from the network volume.
@@ -524,7 +526,6 @@ class RunPodManager:
             try:
                 with open(known_hosts_path, "a") as dest:
                     dest.write(f"# runpod cli:\n[{public_ip}]:{port} {alg} {key}\n")
-                logging.info(f"Added {alg} host key to {known_hosts_path}")
             except Exception as e:
                 logging.error(f"Error adding host key: {e}")
 
