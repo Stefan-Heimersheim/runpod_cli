@@ -249,8 +249,13 @@ class RunPodManager:
             rpc create --ssh_keys="~/.ssh/*.pub"
         """
         # Restart the SSH alias numbering when no pods exist
-        if update_ssh_config and not self._api.get_pods():
-            self.reset()
+        if update_ssh_config:
+            logging.info("Checking for existing pods...")
+            start = time.monotonic()
+            pods = self._api.get_pods()
+            logging.info(f"...found {len(pods)} pod(s) in {time.monotonic() - start:.1f}s")
+            if not pods:
+                self.reset()
 
         # Handle CPU-only pods (convert to str in case Fire passes an int like 4090)
         if gpu_type is None or str(gpu_type).upper() == "CPU":
