@@ -313,10 +313,12 @@ class RunPodManager:
 
         git_email = os.getenv("GIT_EMAIL", "")
         git_name = os.getenv("GIT_NAME", "")
+        # Sanitized local username, used to keep per-user state apart on team-shared volumes
+        local_user = re.sub(r"[^A-Za-z0-9._-]", "_", os.getenv("USER") or "user")
         remote_scripts_path = f"{volume_mount_path}/{runpodcli_dir}"
         scripts = [
             get_setup_root(remote_scripts_path, volume_mount_path),
-            get_setup_user(remote_scripts_path, git_email, git_name, bashrc_line),
+            get_setup_user(remote_scripts_path, git_email, git_name, bashrc_line, local_user),
             get_start(remote_scripts_path),
             get_terminate(remote_scripts_path),
         ]

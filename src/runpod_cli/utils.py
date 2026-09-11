@@ -45,7 +45,9 @@ def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, st
     )
 
 
-def get_setup_user(runpodcli_path: str, git_email: str, git_name: str, bashrc_line: Optional[str] = None) -> Tuple[str, str]:
+def get_setup_user(
+    runpodcli_path: str, git_email: str, git_name: str, bashrc_line: Optional[str] = None, local_user: str = "user"
+) -> Tuple[str, str]:
     bashrc_setup = f"echo {shlex.quote(str(bashrc_line))} >> ~/.bashrc" if bashrc_line else ""
     return "setup_user.sh", textwrap.dedent(
         r"""
@@ -58,13 +60,15 @@ def get_setup_user(runpodcli_path: str, git_email: str, git_name: str, bashrc_li
         # Persist shell history and coding-agent state on the network volume,
         # so they survive pod termination. /workspace always points at the
         # volume (setup_root.sh symlinks it when the mount path differs).
-        echo 'export HISTFILE=/workspace/.bash_history' >> ~/.bashrc
+        # Every pod runs as "user", so the files are keyed by the local
+        # username of the pod creator to keep team members' state separate.
+        echo 'export HISTFILE=/workspace/.bash_history_LOCAL_USER' >> ~/.bashrc
         echo 'export HISTSIZE=100000' >> ~/.bashrc
         echo 'export HISTFILESIZE=100000' >> ~/.bashrc
         echo 'shopt -s histappend' >> ~/.bashrc
         echo 'PROMPT_COMMAND="history -a; $PROMPT_COMMAND"' >> ~/.bashrc
-        echo 'export CLAUDE_CONFIG_DIR=/workspace/.claude' >> ~/.bashrc
-        echo 'export CODEX_HOME=/workspace/.codex' >> ~/.bashrc
+        echo 'export CLAUDE_CONFIG_DIR=/workspace/.claude_LOCAL_USER' >> ~/.bashrc
+        echo 'export CODEX_HOME=/workspace/.codex_LOCAL_USER' >> ~/.bashrc
         # uv cannot hardlink from its container-disk cache into venvs on the
         # network volume; default to copying instead of warning every install.
         echo 'export UV_LINK_MODE=copy' >> ~/.bashrc
@@ -105,6 +109,7 @@ def get_setup_user(runpodcli_path: str, git_email: str, git_name: str, bashrc_li
         .replace("GIT_EMAIL", git_email)
         .replace("GIT_NAME", git_name)
         .replace("CUSTOM_BASHRC_SETUP", bashrc_setup)
+        .replace("LOCAL_USER", local_user)
     )
 
 

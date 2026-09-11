@@ -31,14 +31,37 @@ def test_no_bashrc_line_keeps_default_setup(tmp_path):
     subprocess.run(["bash"], input=setup, text=True, env=env, check=True)
     bashrc = (tmp_path / ".bashrc").read_text()
     for expected in [
-        "export HISTFILE=/workspace/.bash_history",
+        "export HISTFILE=/workspace/.bash_history_user",
         "shopt -s histappend",
         'PROMPT_COMMAND="history -a; $PROMPT_COMMAND"',
-        "export CLAUDE_CONFIG_DIR=/workspace/.claude",
-        "export CODEX_HOME=/workspace/.codex",
+        "export CLAUDE_CONFIG_DIR=/workspace/.claude_user",
+        "export CODEX_HOME=/workspace/.codex_user",
         "export UV_LINK_MODE=copy",
     ]:
         assert expected in bashrc
+
+
+def test_state_files_are_keyed_by_local_user():
+    _, script = get_setup_user("/network/test", "test@example.com", "Test", local_user="stefan")
+    assert "export HISTFILE=/workspace/.bash_history_stefan" in script
+    assert "export CLAUDE_CONFIG_DIR=/workspace/.claude_stefan" in script
+    assert "export CODEX_HOME=/workspace/.codex_stefan" in script
+
+
+def test_cli_embeds_sanitized_local_user(monkeypatch):
+    monkeypatch.setenv("USER", "alice smith")
+    manager = RunPodManager.__new__(RunPodManager)
+    manager._api = Mock()
+    manager._api.get_pub_key.return_value = ""
+    manager._api.get_pods.return_value = [{"id": "existing"}]
+    manager._api.create_pod.side_effect = RuntimeError("stop before provisioning")
+    manager._s3 = Mock()
+    manager._network_volume_id = "vol"
+    manager._region = "EU"
+    with pytest.raises(RuntimeError, match="stop before provisioning"):
+        manager.create(gpu_type="CPU", name="test")
+    uploads = {call.kwargs["Key"]: call.kwargs["Body"] for call in manager._s3.put_object.call_args_list}
+    assert b"export HISTFILE=/workspace/.bash_history_alice_smith" in uploads[".tmp_test/setup_user.sh"]
 
 
 def test_cli_embeds_line_in_setup_script():

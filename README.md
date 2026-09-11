@@ -12,6 +12,7 @@ This version makes several changes:
   - Automatically adds pod **SSH host keys** to your local `known_hosts` (retrieved over HTTPS via S3).
   - **Persistent bash history** and **Claude Code / Codex state** (`CLAUDE_CONFIG_DIR`,
     `CODEX_HOME`) stored on the network volume, so history and logins survive pod termination.
+    The files are keyed by your local username, so team members sharing a volume don't mix state.
   - Sets `UV_LINK_MODE=copy` on the pod, avoiding uv hardlink warnings for venvs on the network volume.
   - Optional global git config on pod (`GIT_NAME`, `GIT_EMAIL`).
   - Installs **Claude Code** and **Codex** on pod startup.
