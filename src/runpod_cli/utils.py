@@ -36,8 +36,6 @@ def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, st
         ln -s RUNPODCLI_PATH/terminate_pod.sh /usr/local/bin/terminate_pod
 
         apt-get update
-        # Make frequently used tools available before the remaining setup
-        # (git for setup_user.sh, curl for the agent installers, sudo for early logins).
         apt-get install -y tmux git rsync curl sudo
 
         echo "...system setup completed!"
