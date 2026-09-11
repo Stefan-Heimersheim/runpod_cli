@@ -143,7 +143,8 @@ on each GPU lookup (a log line shows the request and how long it took, so slow
 lookups are easy to spot). Exact names and IDs, case-insensitive unique
 substrings, and numeric selectors such as `4090` are supported. Ambiguous
 matches ask you to choose a full name or ID. CPU-only creation does not fetch
-the catalog.
+the catalog. `--skip_checks` skips the lookup (and the existing-pod check)
+and takes `--gpu_type` as an exact ID, for the fastest possible `rpc create`.
 
 ## Multiple pod SSH hosts
 

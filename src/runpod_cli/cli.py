@@ -284,6 +284,7 @@ class RunPodManager:
         volume_mount_path: str = "/network",
         bashrc_line: Optional[str] = None,
         check_availability: Optional[bool] = None,
+        skip_checks: Optional[bool] = None,
     ) -> None:
         """Create a new RunPod instance with the specified parameters.
 
@@ -308,6 +309,9 @@ class RunPodManager:
                 e.g. --bashrc_line='export PATH="$HOME/bin:$PATH"'
             check_availability: Check catalog stock before creating a GPU pod and exit 75
                 without creating anything when it is NONE (default: True, RPC_DEFAULT_CHECK_AVAILABILITY)
+            skip_checks: Skip the existing-pod check and the GPU catalog lookup (including the
+                availability preflight); gpu_type must then be an exact catalog ID such as
+                "NVIDIA RTX A4000" (default: False, RPC_DEFAULT_SKIP_CHECKS)
 
         Example:
             rpc create -r 60 -g "A100 SXM"
@@ -329,9 +333,10 @@ class RunPodManager:
         ssh_keys = env_default(ssh_keys, "RPC_DEFAULT_SSH_PUBLIC_KEY_PATH", None)
         bashrc_line = env_default(bashrc_line, "RPC_DEFAULT_BASHRC_LINE", None)
         check_availability = env_default(check_availability, "RPC_DEFAULT_CHECK_AVAILABILITY", True)
+        skip_checks = env_default(skip_checks, "RPC_DEFAULT_SKIP_CHECKS", False)
 
         # Restart the SSH alias numbering when no pods exist
-        if update_ssh_config:
+        if update_ssh_config and not skip_checks:
             logging.info("Checking for existing pods...")
             start = time.monotonic()
             pods = self._api.get_pods()
@@ -344,6 +349,8 @@ class RunPodManager:
         if str(gpu_type).upper() == "CPU":
             gpu_type_id = None
             gpu_display_name = "CPU"
+        elif skip_checks:
+            gpu_type_id = gpu_display_name = str(gpu_type)  # taken as the exact catalog ID
         else:
             gpu_type_id, gpu_display_name, gpu_entry = self._get_gpu_id(str(gpu_type))
             if check_availability:
