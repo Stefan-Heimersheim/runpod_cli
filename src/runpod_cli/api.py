@@ -8,8 +8,8 @@ import requests
 
 RUNPOD_REST_URL = "https://api.runpod.io/v2"
 RUNPOD_GPU_CATALOG_URL = f"{RUNPOD_REST_URL}/catalog/gpus"
-# Account fields (pubKey, teams) have no REST v2 equivalent yet. rp-migrate: keep-v1 file
-RUNPOD_GRAPHQL_URL = "https://api.runpod.io/graphql"
+# Account fields (pubKey, teams) have no REST v2 equivalent yet
+RUNPOD_GRAPHQL_URL = "https://api.runpod.io/graphql"  # rp-migrate: keep-v1
 
 # Error messages that mean "retry later", not "bad request"
 CAPACITY_MARKERS = (
@@ -135,7 +135,7 @@ class RunPodAPI:
         return gpu_types
 
     def get_pods(self) -> List[Dict]:
-        return self._rest("GET", "/pods")["pods"]
+        return self._rest("GET", "/pods")["pods"]  # rp-migrate: ignore — v2 path via _rest helper
 
     def get_pod(self, pod_id: str) -> Dict:
         return self._rest("GET", f"/pods/{pod_id}")
@@ -169,7 +169,7 @@ class RunPodAPI:
             payload: Dict[str, Any] = {
                 "name": name,
                 "image": image_name,
-                "cpu": {"id": flavor.split("-")[0], "vcpuCount": vcpus},
+                "cpu": {"id": flavor.split("-")[0], "vcpuCount": vcpus},  # rp-migrate: ignore — vcpuCount is the v2 name
                 "disk": min(container_disk_in_gb, 20),  # CPU pods max 20GB
             }
         else:
@@ -200,15 +200,15 @@ class RunPodAPI:
         if env:
             payload["env"] = env
 
-        return self._rest("POST", "/pods", payload)
+        return self._rest("POST", "/pods", payload)  # rp-migrate: ignore — v2 path via _rest helper
 
     def terminate_pod(self, pod_id: str) -> None:
-        self._rest("DELETE", f"/pods/{pod_id}")
+        self._rest("DELETE", f"/pods/{pod_id}")  # rp-migrate: ignore — v2 path via _rest helper
 
     def get_teams(self) -> List[Dict]:
-        # rp-migrate: keep-v1 — teams are account data with no REST v2 route
-        data = self._graphql("query { myself { teams { id name } } }")
-        return data.get("myself", {}).get("teams", [])
+        # teams are account data with no REST v2 route
+        data = self._graphql("query { myself { teams { id name } } }")  # rp-migrate: keep-v1
+        return data.get("myself", {}).get("teams", [])  # rp-migrate: keep-v1
 
     def get_network_volume(self, volume_id: str) -> Dict:
         volumes = self._rest("GET", "/network-volumes")["networkVolumes"]
@@ -218,6 +218,6 @@ class RunPodAPI:
         raise ValueError(f"Network volume {volume_id} not found")
 
     def get_pub_key(self) -> Optional[str]:
-        # rp-migrate: keep-v1 — account SSH keys have no REST v2 route
-        data = self._graphql("query { myself { pubKey } }")
-        return data.get("myself", {}).get("pubKey")
+        # account SSH keys have no REST v2 route
+        data = self._graphql("query { myself { pubKey } }")  # rp-migrate: keep-v1
+        return data.get("myself", {}).get("pubKey")  # rp-migrate: keep-v1

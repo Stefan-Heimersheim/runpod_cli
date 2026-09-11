@@ -20,7 +20,7 @@ def test_v2_names_and_authentication_are_used():
                                 timeout=10)
 
 
-@pytest.mark.parametrize("payload", [{"gpus": []}, {"gpus": [{"id": "a", "displayName": "old field"}]},
+@pytest.mark.parametrize("payload", [{"gpus": []}, {"gpus": [{"id": "a", "displayName": "old field"}]},  # rp-migrate: ignore — asserts the v1 field is rejected
                                      {"gpus": [{"id": "", "name": "bad"}]}, None])
 def test_malformed_catalog_is_reported(payload):
     response = Mock(status_code=200)

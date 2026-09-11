@@ -207,11 +207,11 @@ class RunPodManager:
                 hardware = pod.get("gpu") or pod.get("cpu") or {}
                 if pod.get("gpu"):
                     logging.info(f"  GPUs: {hardware.get('count')} x {hardware.get('id')}")
-                logging.info(f"  vcpuCount: {hardware.get('vcpuCount')}")
+                logging.info(f"  vcpuCount: {hardware.get('vcpuCount')}")  # rp-migrate: ignore — vcpuCount is also the v2 field name
                 logging.info(f"  memory: {hardware.get('memory')} GB")
                 network_mounts = (pod.get("mounts") or {}).get("network") or []
                 if network_mounts:
-                    logging.info(f"  volumeMountPath: {network_mounts[0].get('path')}")
+                    logging.info(f"  mountPath: {network_mounts[0].get('path')}")
                 for key in ["disk", "cost", "status"]:
                     logging.info(f"  {key}: {pod.get(key)}")
             logging.info("")

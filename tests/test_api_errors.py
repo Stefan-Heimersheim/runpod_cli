@@ -26,10 +26,12 @@ def test_capacity_error_has_readable_message():
 
 
 def test_validation_error_lists_field_errors():
+    # rp-migrate: ignore start — a fake 422 body quoting a legacy field name, not a call site
     body = {"title": "Unprocessable Entity", "status": 422, "detail": "request body has an error",
             "errors": ["property 'imageName' is unsupported"]}
     with patch("runpod_cli.api.requests.request", return_value=rest_response(422, body)):
         with pytest.raises(RunPodAPIError, match="imageName.*unsupported") as error:
+            # rp-migrate: ignore end
             RunPodAPI("test").create_pod("test", "image", "gpu")
     assert not isinstance(error.value, RunPodCapacityError)
 
@@ -85,13 +87,15 @@ def test_unexpected_errors_are_not_hidden():
 
 
 def test_get_pods_unwraps_v2_envelope():
-    with patch("runpod_cli.api.requests.request", return_value=rest_response(200, {"pods": [{"id": "pod"}]})):
-        assert RunPodAPI("test").get_pods() == [{"id": "pod"}]
+    with patch("runpod_cli.api.requests.request", return_value=rest_response(200, {"pods": [{"id": "pod"}]})):  # rp-migrate: ignore — v2 envelope
+        assert RunPodAPI("test").get_pods() == [{"id": "pod"}]  # rp-migrate: ignore — v2 envelope unwrap
 
 
 def test_pub_key_still_uses_graphql():
+    # rp-migrate: keep-v1 start — account SSH keys have no REST v2 route
     response = Mock(status_code=200)
     response.json.return_value = {"data": {"myself": {"pubKey": "ssh-ed25519 AAAA"}}}
     with patch("runpod_cli.api.requests.post", return_value=response) as post:
         assert RunPodAPI("test").get_pub_key() == "ssh-ed25519 AAAA"
     assert post.call_args.args[0] == "https://api.runpod.io/graphql"
+    # rp-migrate: keep-v1 end

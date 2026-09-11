@@ -29,9 +29,11 @@ def test_gpu_pod_payload_uses_v2_shapes():
     assert payload["ports"] == ["8888/http", "22/tcp"]  # array, not a comma string
     assert payload["mounts"] == {"network": [{"volumeId": "vol1", "path": "/network"}]}
     assert payload["env"] == {"PUBLIC_KEY": "k"}  # map, not [{key, value}]
+    # rp-migrate: ignore start — asserting the legacy names are ABSENT from the payload
     for legacy in ["imageName", "gpuTypeId", "cloudType", "containerDiskInGb", "minVcpuCount",
                    "minMemoryInGb", "dockerArgs", "volumeMountPath", "networkVolumeId"]:
         assert legacy not in payload
+    # rp-migrate: ignore end
 
 
 def test_cpu_pod_payload_uses_flavor_and_vcpu_count():
@@ -39,7 +41,7 @@ def test_cpu_pod_payload_uses_flavor_and_vcpu_count():
         RunPodAPI("test").create_pod(name="n", image_name="img", gpu_type_id=None,
                                      container_disk_in_gb=40, min_vcpu_count=4, min_memory_in_gb=16)
     payload = request.call_args.kwargs["json"]
-    assert payload["cpu"] == {"id": "cpu3g", "vcpuCount": 4}  # cpu3g-4-16 (4GB/vCPU)
+    assert payload["cpu"] == {"id": "cpu3g", "vcpuCount": 4}  # cpu3g-4-16 (4GB/vCPU)  # rp-migrate: ignore
     assert payload["disk"] == 20  # CPU pods max 20GB
     assert "gpu" not in payload and "cloud" not in payload
 
