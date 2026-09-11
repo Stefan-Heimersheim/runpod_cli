@@ -40,9 +40,9 @@ def test_fast_setup_runs_before_slow_installs():
     assert "su -c 'curl -fsSL https://claude.ai/install.sh | bash' user" in install
     assert not re.search(r"^\s*sudo ", install, re.M)  # root needs no sudo prefix
     # install.sh order: urgent tools, then agents, then the remaining apt work
-    assert install.index("tmux git rsync curl sudo") < install.index("claude.ai/install.sh") < install.index("apt-get upgrade")
+    assert install.index("tmux git rsync curl sudo nano") < install.index("claude.ai/install.sh") < install.index("apt-get upgrade")
     # urgent tools try the image's package lists before paying for apt-get update
-    assert "|| { apt-get update && apt-get install -y tmux git rsync curl sudo; }" in install
+    assert "|| { apt-get update && apt-get install -y tmux git rsync curl sudo nano; }" in install
 
 
 def test_terminate_logging_redirects_stderr_without_dead_tee():

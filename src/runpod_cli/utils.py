@@ -49,7 +49,7 @@ def get_install(runpodcli_path: str) -> Tuple[str, str]:
 
         echo "Installing agents, system packages, and tools..."
 
-        apt-get install -y tmux git rsync curl sudo || { apt-get update && apt-get install -y tmux git rsync curl sudo; }
+        apt-get install -y tmux git rsync curl sudo nano || { apt-get update && apt-get install -y tmux git rsync curl sudo nano; }
 
         # Install Claude Code and Codex for the pod user next (they install
         # into ~/.local), so agents are usable before the slower apt work
@@ -58,7 +58,7 @@ def get_install(runpodcli_path: str) -> Tuple[str, str]:
 
         apt-get update
         apt-get upgrade -y
-        apt-get install -y vim ssh net-tools htop zip unzip libopenmpi-dev iputils-ping make fzf restic ripgrep wget pandoc poppler-utils pigz bzip2 nano locales
+        apt-get install -y vim ssh net-tools htop zip unzip libopenmpi-dev iputils-ping make fzf restic ripgrep wget pandoc poppler-utils pigz bzip2 locales
 
         # Install gh
         out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
