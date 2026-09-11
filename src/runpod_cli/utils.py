@@ -55,6 +55,20 @@ def get_setup_user(runpodcli_path: str, git_email: str, git_name: str, bashrc_li
 
         echo "Setting up user environment..."
 
+        # Persist shell history and coding-agent state on the network volume,
+        # so they survive pod termination. /workspace always points at the
+        # volume (setup_root.sh symlinks it when the mount path differs).
+        echo 'export HISTFILE=/workspace/.bash_history' >> ~/.bashrc
+        echo 'export HISTSIZE=100000' >> ~/.bashrc
+        echo 'export HISTFILESIZE=100000' >> ~/.bashrc
+        echo 'shopt -s histappend' >> ~/.bashrc
+        echo 'PROMPT_COMMAND="history -a; $PROMPT_COMMAND"' >> ~/.bashrc
+        echo 'export CLAUDE_CONFIG_DIR=/workspace/.claude' >> ~/.bashrc
+        echo 'export CODEX_HOME=/workspace/.codex' >> ~/.bashrc
+        # uv cannot hardlink from its container-disk cache into venvs on the
+        # network volume; default to copying instead of warning every install.
+        echo 'export UV_LINK_MODE=copy' >> ~/.bashrc
+
         CUSTOM_BASHRC_SETUP
 
         # Git configuration

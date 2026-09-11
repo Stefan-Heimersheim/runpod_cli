@@ -10,7 +10,9 @@ This version makes several changes:
   container disk, so your venvs can reuse them via `--system-site-packages`.
 - Quality-of-life improvements:
   - Automatically adds pod **SSH host keys** to your local `known_hosts` (retrieved over HTTPS via S3).
-  - 
+  - **Persistent bash history** and **Claude Code / Codex state** (`CLAUDE_CONFIG_DIR`,
+    `CODEX_HOME`) stored on the network volume, so history and logins survive pod termination.
+  - Sets `UV_LINK_MODE=copy` on the pod, avoiding uv hardlink warnings for venvs on the network volume.
   - Optional global git config on pod (`GIT_NAME`, `GIT_EMAIL`).
   - Installs **Claude Code** and **Codex** on pod startup.
   - Defaults the pod name to `<username>-<gpu>`.
@@ -143,11 +145,13 @@ are fully managed by runpod_cli, so manual edits may be overwritten.
 Pass a line to append to the pod user's `~/.bashrc`:
 
 ```bash
-rpc create --bashrc_line='export UV_LINK_MODE=copy'
+rpc create --bashrc_line='export PATH="$HOME/bin:$PATH"'
 ```
 
 The line is written verbatim, so shell expressions such as `$HOME` expand on
-the pod when an interactive shell starts.
+the pod when an interactive shell starts. It is appended after the defaults
+set by runpod_cli, so it can override them (e.g. `HISTFILE`, `UV_LINK_MODE`,
+`CLAUDE_CONFIG_DIR`, `CODEX_HOME`).
 
 ## Python environment recommendations
 
@@ -207,9 +211,6 @@ ERROR  | Uncaught exception | <class 'TypeError'>; Inspector.__init__() missing 
 ```
 
 ## Future features & improvements
-- Allow for persistent bash history
-- Set UV_LINK_MODE=copy or move the uv cache
 - Find a better way to wait for ssh keys to be generated than `time.sleep(5)`
 - Allow user to configre an SSH_PUBLIC_KEY_PATH in .env
-- Pre-install VS Code / Cursor server
 - Create a .config/runpod_cli/config file to change the default values (e.g. GPU type, runtime, etc.)
