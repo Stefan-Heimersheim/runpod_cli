@@ -59,8 +59,8 @@ def get_setup_user(runpodcli_path: str, git_email: str, git_name: str, bashrc_li
         # so they survive pod termination. /workspace always points at the
         # volume (setup_root.sh symlinks it when the mount path differs).
         echo 'export HISTFILE=/workspace/.bash_history' >> ~/.bashrc
-        echo 'export HISTSIZE=100000' >> ~/.bashrc
-        echo 'export HISTFILESIZE=100000' >> ~/.bashrc
+        echo 'export HISTSIZE=10000000' >> ~/.bashrc
+        echo 'export HISTFILESIZE=10000000' >> ~/.bashrc
         echo 'shopt -s histappend' >> ~/.bashrc
         echo 'PROMPT_COMMAND="history -a; $PROMPT_COMMAND"' >> ~/.bashrc
         echo 'export CLAUDE_CONFIG_DIR=/workspace/.claude' >> ~/.bashrc
