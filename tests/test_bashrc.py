@@ -31,6 +31,7 @@ def test_cli_embeds_line_in_setup_script():
     manager = RunPodManager.__new__(RunPodManager)
     manager._api = Mock()
     manager._api.get_pub_key.return_value = ""
+    manager._api.get_pods.return_value = [{"id": "existing"}]
     manager._api.create_pod.side_effect = RuntimeError("stop before provisioning")
     manager._s3 = Mock()
     manager._network_volume_id = "vol"
