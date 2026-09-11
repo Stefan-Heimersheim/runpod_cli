@@ -122,6 +122,10 @@ class RunPodManager:
     def _provision_and_wait(self, pod_id: str, n_attempts: int = 60) -> Dict:
         for _ in range(n_attempts):
             pod = self._api.get_pod(pod_id)
+            # v2 exposes lifecycle states, so a doomed pod fails in seconds
+            # instead of timing out after n_attempts
+            if pod.get("status") in ("ERROR", "TERMINATED"):
+                raise RunPodAPIError(f"Pod {pod_id} entered status {pod['status']} during provisioning")
             pod_runtime = pod.get("runtime")
             if pod_runtime is None or not pod_runtime.get("ports"):
                 time.sleep(5)
