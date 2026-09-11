@@ -35,7 +35,11 @@ def test_fast_setup_runs_before_slow_installs():
         assert slow not in setup_user and slow in install
     # user-level pieces run as the pod user via su, everything else as root
     assert "su -c 'curl -fsSL https://claude.ai/install.sh | bash' user" in install
-    assert "sudo" not in install.replace("apt-get install -y sudo", "")
+    assert "sudo " not in install  # root needs no sudo; sudo itself installs early in setup_root
+    # agent installers come before the slow apt work, and their prerequisites
+    # (curl, plus sudo for early logins) install in the fast phase
+    assert install.index("claude.ai/install.sh") < install.index("apt-get upgrade")
+    assert "apt-get install -y tmux git rsync curl sudo" in setup_root
     # setup_user needs git for git config; setup_root provides it first
     assert "apt-get install -y tmux git rsync" in setup_root
 

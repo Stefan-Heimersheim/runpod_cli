@@ -36,8 +36,9 @@ def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, st
         ln -s RUNPODCLI_PATH/terminate_pod.sh /usr/local/bin/terminate_pod
 
         apt-get update
-        # Make frequently used tools available before the remaining setup.
-        apt-get install -y tmux git rsync
+        # Make frequently used tools available before the remaining setup
+        # (git for setup_user.sh, curl for the agent installers, sudo for early logins).
+        apt-get install -y tmux git rsync curl sudo
 
         echo "...system setup completed!"
     """.replace("RUNPODCLI_PATH", runpodcli_path).replace("VOLUME_MOUNT_PATH", volume_mount_path)
@@ -51,14 +52,15 @@ def get_install(runpodcli_path: str) -> Tuple[str, str]:
         exec >> RUNPODCLI_PATH/log.txt 2>&1 # logging
         echo "=== $(date -Iseconds) install.sh ==="
 
-        echo "Installing system packages..."
+        echo "Installing agents, system packages, and tools..."
 
-        apt-get upgrade -y
-        apt-get install -y sudo vim ssh net-tools htop curl zip unzip libopenmpi-dev iputils-ping make fzf restic ripgrep wget pandoc poppler-utils pigz bzip2 nano locales
-
-        # Install Claude Code and Codex for the pod user (they install into ~/.local)
+        # Install Claude Code and Codex for the pod user first (they install
+        # into ~/.local), so agents are usable before the slower apt work
         su -c 'curl -fsSL https://claude.ai/install.sh | bash' user
         su -c 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' user
+
+        apt-get upgrade -y
+        apt-get install -y vim ssh net-tools htop zip unzip libopenmpi-dev iputils-ping make fzf restic ripgrep wget pandoc poppler-utils pigz bzip2 nano locales
 
         # Install gh
         out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
