@@ -34,13 +34,16 @@ def test_fast_setup_runs_before_slow_installs():
     assert "apt-get" not in setup_root and "apt-get" not in setup_user
     assert "git config" not in setup_user  # .gitconfig is written directly
     assert "apt-get upgrade" in install
-    for slow in ["claude.ai/install.sh", "uv pip install", "plotly_get_chrome", "apt install gh"]:
+    for slow in ["claude.ai/install.sh", "uv pip install", "plotly_get_chrome", "apt-get install -y gh"]:
         assert slow not in setup_user and slow in install
     # user-level pieces run as the pod user via su, everything else as root
     assert "su -c 'curl -fsSL https://claude.ai/install.sh | bash' user" in install
     assert not re.search(r"^\s*sudo ", install, re.M)  # root needs no sudo prefix
-    # install.sh order: urgent tools, then agents, then the remaining apt work
-    assert install.index("tmux git rsync curl sudo") < install.index("claude.ai/install.sh") < install.index("apt-get upgrade")
+    # install.sh order: urgent tools, then agents, then gh, then the remaining apt work
+    assert (install.index("tmux git rsync curl sudo") < install.index("claude.ai/install.sh")
+            < install.index("apt-get install -y gh") < install.index("apt-get upgrade"))
+    # gh needs an apt update only for its own just-added repo, so it is scoped
+    assert 'apt-get update -o Dir::Etc::sourcelist="sources.list.d/github-cli.list"' in install
     # urgent tools try the image's package lists before paying for apt-get update
     assert "|| { apt-get update && apt-get install -y tmux git rsync curl sudo; }" in install
 

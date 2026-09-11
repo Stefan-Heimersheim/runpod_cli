@@ -56,19 +56,18 @@ def get_install(runpodcli_path: str) -> Tuple[str, str]:
         su -c 'curl -fsSL https://claude.ai/install.sh | bash' user
         su -c 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' user
 
+        # Install gh; the scoped apt-get update fetches only the gh repo's
+        # package list instead of refreshing every mirror
+        mkdir -p -m 755 /etc/apt/keyrings /etc/apt/sources.list.d \
+            && curl -fsSL -o /etc/apt/keyrings/githubcli-archive-keyring.gpg https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+            && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+            && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
+            && apt-get update -o Dir::Etc::sourcelist="sources.list.d/github-cli.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0" \
+            && apt-get install -y gh
+
         apt-get update
         apt-get upgrade -y
         apt-get install -y vim ssh net-tools htop zip unzip libopenmpi-dev iputils-ping make fzf restic ripgrep wget pandoc poppler-utils pigz bzip2 nano locales
-
-        # Install gh
-        out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-            && mkdir -p -m 755 /etc/apt/keyrings \
-            && cat $out > /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-            && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-            && mkdir -p -m 755 /etc/apt/sources.list.d \
-            && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
-            && apt update \
-            && apt install gh -y
 
         # Install Python packages using uv
         pip install uv
@@ -202,9 +201,6 @@ def get_start(runpodcli_path: str) -> Tuple[str, str]:
             echo 'source ~/.runpod_env' >> ~/.bashrc
         }
 
-        # Fast setup first (accounts, bashrc, git config — seconds), then the
-        # slow installs (apt upgrade, agent CLIs, Python packages — minutes),
-        # so early SSH logins get a fully configured shell.
         setup_ssh
         export_env_vars
         bash RUNPODCLI_PATH/setup_root.sh
