@@ -104,8 +104,13 @@ You can run the CLI either as:
 - `rpc create` — Create a pod (defaults: 1× **RTX A4000**, **60 minutes**).
 - `rpc list` — List your pods.
 - `rpc gpus` — List GPU names and IDs from RunPod's catalog (`--availability` adds live stock).
-- `rpc terminate` — Terminate a specific pod.
+- `rpc terminate POD_ID [POD_ID ...]` — Terminate one or more pods.
 - `rpc reset` — Delete the SSH config files written by runpod_cli.
+- `rpc teams` — List your RunPod teams (IDs for `RUNPOD_TEAM_ID`).
+- `rpc pubkey` — Show the SSH public keys stored in your RunPod account.
+
+Every command accepts `--help`. Flags must be spelled out in full (`--num_gpus`, not `--num_g`); Fire also
+offers single-letter short flags where unambiguous, e.g. `-g` for `--gpu_type` and `-r` for `--runtime`.
 
 ### Examples
 Create a dev pod with one A4000 GPU for 1 hour (these are also the default values):
