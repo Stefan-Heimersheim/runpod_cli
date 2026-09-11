@@ -41,6 +41,25 @@ def getenv(key: str) -> str:
     return value
 
 
+def env_default(flag_value, env_var: str, fallback):
+    """Resolve a create() parameter: CLI flag > RPC_DEFAULT_* from .env > built-in default."""
+    if flag_value is not None:
+        return flag_value
+    value = os.getenv(env_var)
+    if not value:
+        return fallback
+    logging.info(f"Using {env_var}={value} from .env")
+    if isinstance(fallback, bool):
+        if value.strip().lower() in ("1", "true", "yes", "on"):
+            return True
+        if value.strip().lower() in ("0", "false", "no", "off"):
+            return False
+        raise ValueError(f"{env_var} must be a boolean (true/false), got: {value}")
+    if isinstance(fallback, int):
+        return int(value)
+    return value
+
+
 class RunPodManager:
     """RunPod Management CLI - A command-line tool for managing RunPod instances via the RunPod API.
 
@@ -201,14 +220,14 @@ class RunPodManager:
     def create(
         self,
         name: Optional[str] = None,
-        runtime: int = 60,
-        gpu_type: Optional[str] = "RTX A4000",
-        cpus: int = 2,
-        disk: int = 20,
-        forward_agent: bool = False,
-        image_name: str = DEFAULT_IMAGE_NAME,
-        memory: int = 16,
-        num_gpus: int = 1,
+        runtime: Optional[int] = None,
+        gpu_type: Optional[str] = None,
+        cpus: Optional[int] = None,
+        disk: Optional[int] = None,
+        forward_agent: Optional[bool] = None,
+        image_name: Optional[str] = None,
+        memory: Optional[int] = None,
+        num_gpus: Optional[int] = None,
         ssh_keys: Optional[str] = None,
         update_known_hosts: bool = True,
         update_ssh_config: bool = True,
@@ -217,21 +236,25 @@ class RunPodManager:
     ) -> None:
         """Create a new RunPod instance with the specified parameters.
 
+        Each default below can be overridden with an RPC_DEFAULT_* variable in your
+        .env file (see .env.example); explicit CLI flags always take precedence.
+
         Args:
-            runtime: Time in minutes for pod to run (default: 60)
-            gpu_type: GPU type, or "CPU" for CPU-only pod (default: "RTX A4000")
-            num_gpus: Number of GPUs (default: 1)
+            runtime: Time in minutes for pod to run (default: 60, RPC_DEFAULT_RUNTIME)
+            gpu_type: GPU type, or "CPU" for CPU-only pod (default: "RTX A4000", RPC_DEFAULT_GPU_TYPE)
+            num_gpus: Number of GPUs (default: 1, RPC_DEFAULT_NUM_GPUS)
             name: Name for the pod (default: "$USER-$GPU_TYPE")
-            env: Path to credentials .env (defalt: .env and ~/.config/runpod_cli/.env)
-            disk: Container disk size in GB (default: 20, max 20 for CPU pods)
-            cpus: Minimum vCPU count (default: 2)
-            memory: Minimum RAM in GB (default: 16)
-            ssh_keys: Path(s) to SSH public key file(s), space-separated, supports wildcards (default: use RunPod account keys)
-            forward_agent: Whether to forward SSH agent (default: False)
+            disk: Container disk size in GB (default: 20, max 20 for CPU pods, RPC_DEFAULT_DISK)
+            cpus: Minimum vCPU count (default: 2, RPC_DEFAULT_CPUS)
+            memory: Minimum RAM in GB (default: 16, RPC_DEFAULT_MEMORY)
+            ssh_keys: Path(s) to SSH public key file(s), space-separated, supports wildcards
+                (default: use RunPod account keys, RPC_DEFAULT_SSH_PUBLIC_KEY_PATH)
+            forward_agent: Whether to forward SSH agent (default: False, RPC_DEFAULT_FORWARD_AGENT)
             update_known_hosts: Whether to update known hosts (default: True)
             update_ssh_config: Whether to update SSH config (default: True)
-            image_name: Docker image (default: "PyTorch 2.8.0 with CUDA 12.8.1")
-            bashrc_line: Line to append to the pod user's ~/.bashrc, e.g. --bashrc_line='export UV_LINK_MODE=copy'
+            image_name: Docker image (default: "PyTorch 2.8.0 with CUDA 12.8.1", RPC_DEFAULT_IMAGE_NAME)
+            bashrc_line: Line to append to the pod user's ~/.bashrc (RPC_DEFAULT_BASHRC_LINE),
+                e.g. --bashrc_line='export PATH="$HOME/bin:$PATH"'
 
         Example:
             rpc create -r 60 -g "A100 SXM"
@@ -242,6 +265,17 @@ class RunPodManager:
             rpc create --ssh_keys="~/.ssh/id_ed25519.pub ~/.ssh/id_rsa.pub"
             rpc create --ssh_keys="~/.ssh/*.pub"
         """
+        runtime = env_default(runtime, "RPC_DEFAULT_RUNTIME", 60)
+        gpu_type = env_default(gpu_type, "RPC_DEFAULT_GPU_TYPE", "RTX A4000")
+        cpus = env_default(cpus, "RPC_DEFAULT_CPUS", 2)
+        disk = env_default(disk, "RPC_DEFAULT_DISK", 20)
+        forward_agent = env_default(forward_agent, "RPC_DEFAULT_FORWARD_AGENT", False)
+        image_name = env_default(image_name, "RPC_DEFAULT_IMAGE_NAME", DEFAULT_IMAGE_NAME)
+        memory = env_default(memory, "RPC_DEFAULT_MEMORY", 16)
+        num_gpus = env_default(num_gpus, "RPC_DEFAULT_NUM_GPUS", 1)
+        ssh_keys = env_default(ssh_keys, "RPC_DEFAULT_SSH_PUBLIC_KEY_PATH", None)
+        bashrc_line = env_default(bashrc_line, "RPC_DEFAULT_BASHRC_LINE", None)
+
         # Restart the SSH alias numbering when no pods exist
         if update_ssh_config:
             logging.info("Checking for existing pods...")
@@ -252,7 +286,7 @@ class RunPodManager:
                 self.reset()
 
         # Handle CPU-only pods (convert to str in case Fire passes an int like 4090)
-        if gpu_type is None or str(gpu_type).upper() == "CPU":
+        if str(gpu_type).upper() == "CPU":
             gpu_type_id = None
             gpu_display_name = "CPU"
         else:
