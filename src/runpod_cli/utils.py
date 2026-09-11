@@ -3,7 +3,7 @@ import shlex
 from typing import Optional, Tuple
 
 # Default Docker image for pods
-DEFAULT_IMAGE_NAME = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04"
+DEFAULT_IMAGE_NAME = "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404"
 
 # Shell scripts to load onto the pod
 def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, str]:
@@ -73,8 +73,12 @@ def get_install(runpodcli_path: str) -> Tuple[str, str]:
         # Install Python packages using uv
         pip install uv
         uv pip install --system --compile-bytecode ipykernel kaleido nbformat numpy scipy scikit-learn scikit-image transformers datasets torchvision pandas matplotlib seaborn plotly jaxtyping einops tqdm ruff basedpyright umap-learn ipywidgets virtualenv  pytest git+https://github.com/callummcdougall/eindex.git transformer_lens nnsight
-        # For plotly (kaleido) png export
-        apt-get install -y libnss3 libatk-bridge2.0-0 libcups2 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2
+        # For plotly (kaleido) png export. Ubuntu 24.04's time_t transition
+        # renamed some of these (libasound2 -> libasound2t64), so fall back
+        # per package instead of letting one rename abort the whole line.
+        for pkg in libnss3 libatk-bridge2.0-0 libcups2 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2; do
+            apt-get install -y $pkg || apt-get install -y ${pkg}t64
+        done
         plotly_get_chrome -y
         # Create a virtual environment for the pod user
         su -c 'uv venv ~/.venv --python $(python --version | cut -d" " -f2 | cut -d. -f1-2) --system-site-packages' user

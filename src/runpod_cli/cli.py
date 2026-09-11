@@ -292,7 +292,7 @@ class RunPodManager:
             forward_agent: Whether to forward SSH agent (default: False, RPC_DEFAULT_FORWARD_AGENT)
             update_known_hosts: Whether to update known hosts (default: True)
             update_ssh_config: Whether to update SSH config (default: True)
-            image_name: Docker image (default: "PyTorch 2.8.0 with CUDA 12.8.1", RPC_DEFAULT_IMAGE_NAME)
+            image_name: Docker image (default: "PyTorch 2.8.0 with CUDA 12.8.1 on Ubuntu 24.04", RPC_DEFAULT_IMAGE_NAME)
             bashrc_line: Line to append to the pod user's ~/.bashrc (RPC_DEFAULT_BASHRC_LINE),
                 e.g. --bashrc_line='export PATH="$HOME/bin:$PATH"'
             check_availability: Check catalog stock before creating a GPU pod and exit 75
