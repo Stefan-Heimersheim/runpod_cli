@@ -63,8 +63,8 @@ def get_setup_user(
         # Every pod runs as "user", so the files are keyed by the local
         # username of the pod creator to keep team members' state separate.
         echo 'export HISTFILE=/workspace/.bash_history_LOCAL_USER' >> ~/.bashrc
-        echo 'export HISTSIZE=100000' >> ~/.bashrc
-        echo 'export HISTFILESIZE=100000' >> ~/.bashrc
+        echo 'export HISTSIZE=10000000' >> ~/.bashrc
+        echo 'export HISTFILESIZE=10000000' >> ~/.bashrc
         echo 'shopt -s histappend' >> ~/.bashrc
         echo 'PROMPT_COMMAND="history -a; $PROMPT_COMMAND"' >> ~/.bashrc
         echo 'export CLAUDE_CONFIG_DIR=/workspace/.claude_LOCAL_USER' >> ~/.bashrc
