@@ -59,6 +59,11 @@ def get_install(runpodcli_path: str) -> Tuple[str, str]:
 
         echo "Installing agents, system packages, and tools..."
 
+        printf '%s\n' 'http://archive.ubuntu.com/ubuntu/' 'http://mirrors.edge.kernel.org/ubuntu/' 'http://de.archive.ubuntu.com/ubuntu/' > /etc/apt/mirrors.txt
+        sed -i -E 's#^(deb )https?://(archive|security)\.ubuntu\.com/ubuntu/?#\1mirror+file:/etc/apt/mirrors.txt#' /etc/apt/sources.list 2>/dev/null  # Ubuntu 22.04
+        sed -i -E 's#^(URIs: )https?://(archive|security)\.ubuntu\.com/ubuntu/?#\1mirror+file:/etc/apt/mirrors.txt#' /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null  # Ubuntu 24.04
+        printf '%s\n' 'Acquire::http::Timeout "5";' 'Acquire::https::Timeout "5";' 'Acquire::Retries "1";' > /etc/apt/apt.conf.d/99runpod-cli
+
         apt-get install -y tmux git rsync curl sudo nano || { apt-get update && apt-get install -y tmux git rsync curl sudo nano; }
 
         # Install Claude Code and Codex for the pod user next (they install
