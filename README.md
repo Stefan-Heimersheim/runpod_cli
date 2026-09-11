@@ -211,6 +211,5 @@ ERROR  | Uncaught exception | <class 'TypeError'>; Inspector.__init__() missing 
 ```
 
 ## Future features & improvements
-- Find a better way to wait for ssh keys to be generated than `time.sleep(5)`
 - Allow user to configre an SSH_PUBLIC_KEY_PATH in .env
 - Create a .config/runpod_cli/config file to change the default values (e.g. GPU type, runtime, etc.)
