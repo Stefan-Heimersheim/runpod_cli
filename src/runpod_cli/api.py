@@ -115,24 +115,37 @@ class RunPodAPI:
             raise RunPodAPIError("; ".join(messages))
         return result.get("data", {})
 
-    def get_gpu_types(self) -> Dict[str, str]:
-        """Fetch current GPU IDs mapped to display names from the REST v2 catalog."""
+    def get_gpu_catalog(self) -> List[Dict]:
+        """Fetch the GPU catalog with live pod availability from REST v2.
+
+        Each entry carries `availability` (HIGH/MEDIUM/LOW/NONE) and, where
+        RunPod reports it, per-datacenter stock under `dataCenters`.
+        """
         logging.info(f"Fetching GPU catalog: GET {RUNPOD_GPU_CATALOG_URL} ...")
         start = time.monotonic()
         try:
-            response = requests.get(RUNPOD_GPU_CATALOG_URL, headers=self._headers, timeout=10)
+            # product is required whenever availability is requested
+            response = requests.get(RUNPOD_GPU_CATALOG_URL, headers=self._headers,
+                                    params={"include": "AVAILABILITY", "product": "POD"}, timeout=10)
         except requests.RequestException as error:
             raise RunPodAPIError(f"Could not fetch GPU catalog: {error}") from error
         if response.status_code != 200:
             raise RunPodAPIError(f"GPU catalog request failed (HTTP {response.status_code}). Check your RunPod API key and retry.")
         try:
-            gpu_types = {gpu["id"]: gpu["name"] for gpu in response.json()["gpus"]}
-            if not gpu_types or not all(key.strip() and isinstance(name, str) and name.strip() for key, name in gpu_types.items()):
+            gpus = response.json()["gpus"]
+            if not gpus or not all(
+                isinstance(gpu.get("id"), str) and gpu["id"].strip() and isinstance(gpu.get("name"), str) and gpu["name"].strip()
+                for gpu in gpus
+            ):
                 raise ValueError("Empty or invalid GPU catalog")
         except (ValueError, KeyError, TypeError, AttributeError) as error:
             raise RunPodAPIError("RunPod returned an invalid GPU catalog") from error
-        logging.info(f"...fetched {len(gpu_types)} GPU types in {time.monotonic() - start:.1f}s")
-        return gpu_types
+        logging.info(f"...fetched {len(gpus)} GPU types in {time.monotonic() - start:.1f}s")
+        return gpus
+
+    def get_gpu_types(self) -> Dict[str, str]:
+        """Fetch current GPU IDs mapped to display names from the REST v2 catalog."""
+        return {gpu["id"]: gpu["name"] for gpu in self.get_gpu_catalog()}
 
     def get_pods(self) -> List[Dict]:
         return self._rest("GET", "/pods")["pods"]  # rp-migrate: ignore — v2 path via _rest helper

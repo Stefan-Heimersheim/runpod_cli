@@ -12,7 +12,7 @@ import fire
 from dotenv import load_dotenv
 
 try:
-    from .api import RunPodAPIError, RunPodAPI
+    from .api import RunPodAPIError, RunPodCapacityError, RunPodAPI
     from .utils import (
         DEFAULT_IMAGE_NAME,
         get_install,
@@ -22,7 +22,7 @@ try:
         get_terminate,
     )
 except ImportError:
-    from api import RunPodAPIError, RunPodAPI  # type: ignore
+    from api import RunPodAPIError, RunPodCapacityError, RunPodAPI  # type: ignore
     from utils import (  # type: ignore
         DEFAULT_IMAGE_NAME,
         get_install,
@@ -169,25 +169,52 @@ class RunPodManager:
         else:
             return "Unknown"
 
-    def _get_gpu_id(self, gpu_type: str | int) -> Tuple[str, str]:
+    def _get_gpu_id(self, gpu_type: str | int) -> Tuple[str, str, Dict]:
         query = str(gpu_type).strip().lower()
         if not query:
             raise ValueError("GPU type must not be empty")
-        gpu_types = self._api.get_gpu_types()
+        catalog = {gpu["id"]: gpu for gpu in self._api.get_gpu_catalog()}
+        gpu_types = {gpu_id: gpu["name"] for gpu_id, gpu in catalog.items()}
         # Exact IDs/names take precedence over substring matches.
         matches = [gpu_id for gpu_id, name in gpu_types.items() if query in (gpu_id.lower(), name.lower())]
         if not matches:
             matches = [gpu_id for gpu_id, name in gpu_types.items() if query in gpu_id.lower() or query in name.lower()]
         if len(matches) == 1:
-            return matches[0], gpu_types[matches[0]]
+            return matches[0], gpu_types[matches[0]], catalog[matches[0]]
         if len(matches) > 1:
             raise ValueError(f"Ambiguous GPU type: {gpu_type} matches {matches}. Use a full name or ID from rpc gpus.")
         raise ValueError(f"Unknown GPU type: {gpu_type}. Use rpc gpus to list GPU names and IDs.")
 
-    def gpus(self) -> None:
-        """List GPU names and IDs from RunPod's catalog."""
-        for gpu_id, name in sorted(self._api.get_gpu_types().items()):
-            print(f"{name}\t{gpu_id}")
+    def _region_availability(self, gpu_entry: Dict) -> Tuple[Optional[str], str]:
+        """Best available stock signal: the volume's datacenter if reported, else overall."""
+        for dc in gpu_entry.get("dataCenters") or []:
+            if dc.get("id") == self._region:
+                return dc.get("availability"), f"in {self._region}"
+        return gpu_entry.get("availability"), "overall"
+
+    def _check_gpu_availability(self, gpu_entry: Dict, gpu_display_name: str) -> None:
+        availability, scope = self._region_availability(gpu_entry)
+        if availability == "NONE":
+            raise RunPodCapacityError(
+                f"{gpu_display_name} has no availability {scope} right now (catalog preflight; nothing was created). "
+                "Retry later, choose another GPU (rpc gpus --availability), or pass --check_availability=False to try anyway."
+            )
+        if availability:
+            logging.info(f"  Availability {scope}: {availability}")
+
+    def gpus(self, availability: bool = False) -> None:
+        """List GPU names and IDs from RunPod's catalog.
+
+        Args:
+            availability: Also show live pod stock (HIGH/MEDIUM/LOW/NONE), overall
+                and for your network volume's datacenter where reported.
+        """
+        for gpu_id, gpu in sorted((gpu["id"], gpu) for gpu in self._api.get_gpu_catalog()):
+            line = f"{gpu['name']}\t{gpu_id}"
+            if availability:
+                datacenters = {dc.get("id"): dc.get("availability") for dc in gpu.get("dataCenters") or []}
+                line += f"\t{gpu.get('availability') or '?'}\t{self._region}:{datacenters.get(self._region) or '?'}"
+            print(line)
 
     def list(self, verbose: bool = False) -> None:
         """List all pods in your RunPod account.
@@ -245,6 +272,7 @@ class RunPodManager:
         update_ssh_config: bool = True,
         volume_mount_path: str = "/network",
         bashrc_line: Optional[str] = None,
+        check_availability: Optional[bool] = None,
     ) -> None:
         """Create a new RunPod instance with the specified parameters.
 
@@ -267,6 +295,8 @@ class RunPodManager:
             image_name: Docker image (default: "PyTorch 2.8.0 with CUDA 12.8.1", RPC_DEFAULT_IMAGE_NAME)
             bashrc_line: Line to append to the pod user's ~/.bashrc (RPC_DEFAULT_BASHRC_LINE),
                 e.g. --bashrc_line='export PATH="$HOME/bin:$PATH"'
+            check_availability: Check catalog stock before creating a GPU pod and exit 75
+                without creating anything when it is NONE (default: True, RPC_DEFAULT_CHECK_AVAILABILITY)
 
         Example:
             rpc create -r 60 -g "A100 SXM"
@@ -287,6 +317,7 @@ class RunPodManager:
         num_gpus = env_default(num_gpus, "RPC_DEFAULT_NUM_GPUS", 1)
         ssh_keys = env_default(ssh_keys, "RPC_DEFAULT_SSH_PUBLIC_KEY_PATH", None)
         bashrc_line = env_default(bashrc_line, "RPC_DEFAULT_BASHRC_LINE", None)
+        check_availability = env_default(check_availability, "RPC_DEFAULT_CHECK_AVAILABILITY", True)
 
         # Restart the SSH alias numbering when no pods exist
         if update_ssh_config:
@@ -302,7 +333,9 @@ class RunPodManager:
             gpu_type_id = None
             gpu_display_name = "CPU"
         else:
-            gpu_type_id, gpu_display_name = self._get_gpu_id(str(gpu_type))
+            gpu_type_id, gpu_display_name, gpu_entry = self._get_gpu_id(str(gpu_type))
+            if check_availability:
+                self._check_gpu_availability(gpu_entry, gpu_display_name)
 
         name = name or f"{os.getenv('USER')}-{gpu_display_name}"
         runpodcli_dir = f".tmp_{name.replace(' ', '_')}"

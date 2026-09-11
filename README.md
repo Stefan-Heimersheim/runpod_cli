@@ -103,7 +103,7 @@ You can run the CLI either as:
 ### Available commands
 - `rpc create` — Create a pod (defaults: 1× **RTX A4000**, **60 minutes**).
 - `rpc list` — List your pods.
-- `rpc gpus` — List GPU names and IDs from RunPod's catalog.
+- `rpc gpus` — List GPU names and IDs from RunPod's catalog (`--availability` adds live stock).
 - `rpc terminate` — Terminate a specific pod.
 - `rpc reset` — Delete the SSH config files written by runpod_cli.
 
@@ -205,6 +205,17 @@ into the environment.
 
 
 ## Retrying when no pods are available
+
+Before creating a GPU pod, `rpc create` checks live stock in RunPod's catalog
+(preferring your network volume's datacenter, falling back to overall
+availability) and exits with code **75** without creating anything when it is
+`NONE`. Disable this preflight with `--check_availability=False` (or
+`RPC_DEFAULT_CHECK_AVAILABILITY=false` in your `.env`). Check stock yourself
+with:
+
+```bash
+rpc gpus --availability   # name, ID, overall stock, stock in your volume's datacenter
+```
 
 If RunPod reports that no instances match the requested specifications, `rpc`
 prints the error without a traceback and exits with code **75**. Other RunPod API
