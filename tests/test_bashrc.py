@@ -16,15 +16,29 @@ def test_bashrc_line_is_appended(tmp_path):
     env = dict(os.environ, HOME=str(tmp_path))
     subprocess.run(["bash"], input=setup, text=True, env=env, check=True)
     bashrc = (tmp_path / ".bashrc").read_text()
-    assert bashrc.strip() == line
+    # The custom line comes last so it can override the persistence defaults
+    assert bashrc.strip().endswith(line)
+    assert bashrc.index("export UV_LINK_MODE=copy") < bashrc.index(line)
     subprocess.run(["bash"], input=bashrc + '\ntest "$CUSTOM_TEST" = "$HOME/config"\n',
                    text=True, env=env, check=True)
 
 
-def test_no_bashrc_line_keeps_default_setup():
+def test_no_bashrc_line_keeps_default_setup(tmp_path):
     _, script = get_setup_user("/network/test", "test@example.com", "Test")
     assert "CUSTOM_BASHRC_SETUP" not in script
-    assert ">> ~/.bashrc" not in script
+    setup = script.split("# Git configuration")[0]
+    env = dict(os.environ, HOME=str(tmp_path))
+    subprocess.run(["bash"], input=setup, text=True, env=env, check=True)
+    bashrc = (tmp_path / ".bashrc").read_text()
+    for expected in [
+        "export HISTFILE=/workspace/.bash_history",
+        "shopt -s histappend",
+        'PROMPT_COMMAND="history -a; $PROMPT_COMMAND"',
+        "export CLAUDE_CONFIG_DIR=/workspace/.claude",
+        "export CODEX_HOME=/workspace/.codex",
+        "export UV_LINK_MODE=copy",
+    ]:
+        assert expected in bashrc
 
 
 def test_cli_embeds_line_in_setup_script():
