@@ -30,6 +30,12 @@ class RunPodCapacityError(RunPodAPIError):
 
     exit_code = 75
 
+
+class RunPodConfigError(ValueError):
+    """A problem with the user's input or .env that is reported without a traceback."""
+
+    exit_code = 1
+
 # CPU instance types: (instance_id, vcpus, memory_gb)
 # Flavors: m = 8GB/vCPU, g = 4GB/vCPU, c = 2GB/vCPU
 CPU_INSTANCES: List[Tuple[str, int, int]] = [
@@ -62,7 +68,7 @@ def select_cpu_instance(min_vcpus: int, min_memory_gb: int) -> str:
         if vcpus >= min_vcpus and mem >= min_memory_gb
     ]
     if not candidates:
-        raise ValueError(
+        raise RunPodConfigError(
             f"No CPU instance available with {min_vcpus} vCPUs and {min_memory_gb}GB RAM. "
             f"Max available: 32 vCPUs, 256GB RAM."
         )
@@ -228,7 +234,7 @@ class RunPodAPI:
         for vol in volumes:
             if vol.get("id") == volume_id:
                 return vol
-        raise ValueError(f"Network volume {volume_id} not found")
+        raise RunPodConfigError(f"Network volume {volume_id} not found")
 
     def get_pub_key(self) -> Optional[str]:
         # account SSH keys have no REST v2 route
