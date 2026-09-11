@@ -15,8 +15,6 @@ try:
     from .api import RunPodAPIError, RunPodGraphQL
     from .utils import (
         DEFAULT_IMAGE_NAME,
-        GPU_DISPLAY_NAME_TO_ID,
-        GPU_ID_TO_DISPLAY_NAME,
         get_setup_root,
         get_setup_user,
         get_start,
@@ -26,8 +24,6 @@ except ImportError:
     from api import RunPodAPIError, RunPodGraphQL  # type: ignore
     from utils import (  # type: ignore
         DEFAULT_IMAGE_NAME,
-        GPU_DISPLAY_NAME_TO_ID,
-        GPU_ID_TO_DISPLAY_NAME,
         get_setup_root,
         get_setup_user,
         get_start,
@@ -150,26 +146,24 @@ class RunPodManager:
             return "Unknown"
 
     def _get_gpu_id(self, gpu_type: str | int) -> Tuple[str, str]:
-        gpu_type = str(gpu_type)
-        if gpu_type in GPU_DISPLAY_NAME_TO_ID:
-            # A name was passed
-            gpu_id = GPU_DISPLAY_NAME_TO_ID[gpu_type]
-            gpu_name = gpu_type
-        elif gpu_type in GPU_ID_TO_DISPLAY_NAME:
-            # An ID was passed
-            gpu_id = gpu_type
-            gpu_name = GPU_ID_TO_DISPLAY_NAME[gpu_id]
-        else:
-            # Attempt fuzzy matching, but only if unique
-            matches = [gpu_id for gpu_name, gpu_id in GPU_DISPLAY_NAME_TO_ID.items() if gpu_type.lower() in gpu_id.lower() or gpu_type.lower() in gpu_name.lower()]
-            if len(matches) == 1:
-                gpu_id = matches[0]
-                gpu_name = GPU_ID_TO_DISPLAY_NAME[gpu_id]
-            elif len(matches) > 1:
-                raise ValueError(f"Ambiguous GPU type: {gpu_type} matches {matches}. Please use a full name or ID from https://docs.runpod.io/references/gpu-types")
-            else:
-                raise ValueError(f"Unknown GPU type: {gpu_type}")
-        return gpu_id, gpu_name
+        query = str(gpu_type).strip().lower()
+        if not query:
+            raise ValueError("GPU type must not be empty")
+        gpu_types = self._api.get_gpu_types()
+        # Exact IDs/names take precedence over substring matches.
+        matches = [gpu_id for gpu_id, name in gpu_types.items() if query in (gpu_id.lower(), name.lower())]
+        if not matches:
+            matches = [gpu_id for gpu_id, name in gpu_types.items() if query in gpu_id.lower() or query in name.lower()]
+        if len(matches) == 1:
+            return matches[0], gpu_types[matches[0]]
+        if len(matches) > 1:
+            raise ValueError(f"Ambiguous GPU type: {gpu_type} matches {matches}. Use a full name or ID from rpc gpus.")
+        raise ValueError(f"Unknown GPU type: {gpu_type}. Use rpc gpus to list GPU names and IDs.")
+
+    def gpus(self) -> None:
+        """List GPU names and IDs from RunPod's catalog."""
+        for gpu_id, name in sorted(self._api.get_gpu_types().items()):
+            print(f"{name}\t{gpu_id}")
 
     def list(self, verbose: bool = False) -> None:
         """List all pods in your RunPod account.

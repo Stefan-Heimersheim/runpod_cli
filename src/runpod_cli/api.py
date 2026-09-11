@@ -1,10 +1,13 @@
 """GraphQL API client for RunPod."""
 
+import logging
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
 RUNPOD_GRAPHQL_URL = "https://api.runpod.io/graphql"
+RUNPOD_GPU_CATALOG_URL = "https://api.runpod.io/v2/catalog/gpus"
 
 
 class RunPodAPIError(RuntimeError):
@@ -86,6 +89,25 @@ class RunPodGraphQL:
                 raise RunPodCapacityError("; ".join(messages))
             raise RunPodAPIError("; ".join(messages))
         return result.get("data", {})
+
+    def get_gpu_types(self) -> Dict[str, str]:
+        """Fetch current GPU IDs mapped to display names from the REST v2 catalog."""
+        logging.info(f"Fetching GPU catalog: GET {RUNPOD_GPU_CATALOG_URL} ...")
+        start = time.monotonic()
+        try:
+            response = requests.get(RUNPOD_GPU_CATALOG_URL, headers=self._headers, timeout=10)
+        except requests.RequestException as error:
+            raise RunPodAPIError(f"Could not fetch GPU catalog: {error}") from error
+        if response.status_code != 200:
+            raise RunPodAPIError(f"GPU catalog request failed (HTTP {response.status_code}). Check your RunPod API key and retry.")
+        try:
+            gpu_types = {gpu["id"]: gpu["name"] for gpu in response.json()["gpus"]}
+            if not gpu_types or not all(key.strip() and isinstance(name, str) and name.strip() for key, name in gpu_types.items()):
+                raise ValueError("Empty or invalid GPU catalog")
+        except (ValueError, KeyError, TypeError, AttributeError) as error:
+            raise RunPodAPIError("RunPod returned an invalid GPU catalog") from error
+        logging.info(f"...fetched {len(gpu_types)} GPU types in {time.monotonic() - start:.1f}s")
+        return gpu_types
 
     def get_pods(self) -> List[Dict]:
         query = """

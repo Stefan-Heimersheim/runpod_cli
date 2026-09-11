@@ -88,6 +88,7 @@ You can run the CLI either as:
 ### Available commands
 - `rpc create` — Create a pod (defaults: 1× **RTX A4000**, **60 minutes**).
 - `rpc list` — List your pods.
+- `rpc gpus` — List GPU names and IDs from RunPod's catalog.
 - `rpc terminate` — Terminate a specific pod.
 - `rpc reset` — Delete the SSH config files written by runpod_cli.
 
@@ -102,6 +103,15 @@ Create a dev pod with two A100 GPUs for 4 hours (adjust PCIe to SXM if needed):
 ```bash
 rpc create --gpu_type "A100 PCIe" --runtime 240 --gpu_count 2
 ```
+
+## GPU catalog
+
+GPU names and IDs come from RunPod's REST v2 `/catalog/gpus` endpoint, fetched
+on each GPU lookup (a log line shows the request and how long it took, so slow
+lookups are easy to spot). Exact names and IDs, case-insensitive unique
+substrings, and numeric selectors such as `4090` are supported. Ambiguous
+matches ask you to choose a full name or ID. CPU-only creation does not fetch
+the catalog.
 
 ## Multiple pod SSH hosts
 
