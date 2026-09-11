@@ -18,6 +18,10 @@ This version makes several changes:
   - Sets `UV_LINK_MODE=copy` on the pod, avoiding uv hardlink warnings for venvs on the network volume.
   - Optional global git config on pod (`GIT_NAME`, `GIT_EMAIL`).
   - Installs **Claude Code** and **Codex** on pod startup.
+  - **Two-phase startup**: fast setup (user account, bashrc, git config) finishes within
+    seconds of pod start so early SSH logins get a configured shell; slow installs
+    (apt upgrade, agent CLIs, Python packages) continue afterwards — watch progress
+    with `tail -f /network/.tmp_*/log.txt` on the pod.
   - Defaults the pod name to `<username>-<gpu>`.
   - Allows **GPU display name or ID** (e.g. `"RTX A4000"` or `"NVIDIA RTX A4000"`).
 

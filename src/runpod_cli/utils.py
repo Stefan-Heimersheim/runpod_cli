@@ -29,19 +29,35 @@ def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, st
             ln -s VOLUME_MOUNT_PATH /workspace
         fi
 
-        apt-get update
-        # Make frequently used tools available before the remaining setup.
-        apt-get install -y tmux git rsync
-        apt-get upgrade -y
-        apt-get install -y sudo vim ssh net-tools htop curl zip unzip libopenmpi-dev iputils-ping make fzf restic ripgrep wget pandoc poppler-utils pigz bzip2 nano locales
         echo 'user ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
         echo "export HF_HOME=/workspace/hf_home/" >> /home/user/.bashrc
         echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/user/.bashrc
         chmod a+x RUNPODCLI_PATH/terminate_pod.sh
         ln -s RUNPODCLI_PATH/terminate_pod.sh /usr/local/bin/terminate_pod
 
+        apt-get update
+        # Make frequently used tools available before the remaining setup.
+        apt-get install -y tmux git rsync
+
         echo "...system setup completed!"
     """.replace("RUNPODCLI_PATH", runpodcli_path).replace("VOLUME_MOUNT_PATH", volume_mount_path)
+    )
+
+
+def get_install_root(runpodcli_path: str) -> Tuple[str, str]:
+    return "install_root.sh", textwrap.dedent(
+        r"""
+        #!/bin/bash
+        exec >> RUNPODCLI_PATH/log.txt 2>&1 # logging
+        echo "=== $(date -Iseconds) install_root.sh ==="
+
+        echo "Installing system packages..."
+
+        apt-get upgrade -y
+        apt-get install -y sudo vim ssh net-tools htop curl zip unzip libopenmpi-dev iputils-ping make fzf restic ripgrep wget pandoc poppler-utils pigz bzip2 nano locales
+
+        echo "...system packages installed!"
+    """.replace("RUNPODCLI_PATH", runpodcli_path)
     )
 
 
@@ -84,6 +100,24 @@ def get_setup_user(
         fi
         git config --global init.defaultBranch main
 
+        echo "...user setup completed!"
+    """.replace("RUNPODCLI_PATH", runpodcli_path)
+        .replace("GIT_EMAIL", git_email)
+        .replace("GIT_NAME", git_name)
+        .replace("CUSTOM_BASHRC_SETUP", bashrc_setup)
+        .replace("LOCAL_USER", local_user)
+    )
+
+
+def get_install_user(runpodcli_path: str) -> Tuple[str, str]:
+    return "install_user.sh", textwrap.dedent(
+        r"""
+        #!/bin/bash
+        exec >> RUNPODCLI_PATH/log.txt 2>&1 # logging
+        echo "=== $(date -Iseconds) install_user.sh ==="
+
+        echo "Installing user tools and Python packages..."
+
         # Install Claude Code and Codex
         curl -fsSL https://claude.ai/install.sh | bash
         curl -fsSL https://chatgpt.com/codex/install.sh | sh
@@ -108,12 +142,8 @@ def get_setup_user(
         # Create a virtual environment for the user
         python_version=$(python --version | cut -d' ' -f2 | cut -d'.' -f1-2)
         uv venv ~/.venv --python $python_version --system-site-packages
-        echo "...user setup completed!"
+        echo "...user installs completed!"
     """.replace("RUNPODCLI_PATH", runpodcli_path)
-        .replace("GIT_EMAIL", git_email)
-        .replace("GIT_NAME", git_name)
-        .replace("CUSTOM_BASHRC_SETUP", bashrc_setup)
-        .replace("LOCAL_USER", local_user)
     )
 
 
@@ -182,10 +212,16 @@ def get_start(runpodcli_path: str) -> Tuple[str, str]:
             echo 'source ~/.runpod_env' >> ~/.bashrc
         }
 
+        # Fast setup first (accounts, bashrc, git config — seconds), then the
+        # slow installs (apt upgrade, agent CLIs, Python packages — minutes),
+        # so early SSH logins get a fully configured shell.
         setup_ssh
         export_env_vars
         bash RUNPODCLI_PATH/setup_root.sh
         su -c "bash RUNPODCLI_PATH/setup_user.sh" user
+        echo "Fast setup finished, pod is ready to log in; installs continue..."
+        bash RUNPODCLI_PATH/install_root.sh
+        su -c "bash RUNPODCLI_PATH/install_user.sh" user
 
         echo "Start script(s) finished, pod is ready to use."
     """.replace("RUNPODCLI_PATH", runpodcli_path)
