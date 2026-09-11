@@ -4,6 +4,7 @@ import os
 import re
 import textwrap
 import time
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
@@ -327,6 +328,7 @@ class RunPodManager:
             logging.info(f"...found {len(pods)} pod(s) in {time.monotonic() - start:.1f}s")
             if not pods:
                 self.reset()
+                self._cleanup_scripts_dirs()
 
         # Handle CPU-only pods (convert to str in case Fire passes an int like 4090)
         if str(gpu_type).upper() == "CPU":
@@ -338,7 +340,8 @@ class RunPodManager:
                 self._check_gpu_availability(gpu_entry, gpu_display_name)
 
         name = name or f"{os.getenv('USER')}-{gpu_display_name}"
-        runpodcli_dir = f".tmp_{name.replace(' ', '_')}"
+        # Unique per pod, so same-named pods never share logs or host keys
+        runpodcli_dir = f".tmp_{name.replace(' ', '_')}_{uuid.uuid4().hex[:8]}"
 
         git_email = os.getenv("GIT_EMAIL", "")
         git_name = os.getenv("GIT_NAME", "")
@@ -440,6 +443,29 @@ class RunPodManager:
             dest.write(f"Include {config_path}.{number}\n")
         logging.info(f"SSH config at {config_path} updated")
         logging.info(f"Connect with: ssh runpod (or: ssh runpod{number})")
+
+    def _cleanup_scripts_dirs(self) -> None:
+        """Delete leftover .tmp_* script directories from the network volume.
+
+        Called when no pods exist, so nothing can still be using them. Stale
+        directories otherwise accumulate old logs and, worse, old SSH host
+        keys that the known_hosts polling could pick up for a new pod.
+        """
+        keys = []
+        token = None
+        while True:
+            kwargs = {"Bucket": self._network_volume_id, "Prefix": ".tmp_"}
+            if token:
+                kwargs["ContinuationToken"] = token
+            response = self._s3.list_objects_v2(**kwargs)
+            keys += [{"Key": obj["Key"]} for obj in response.get("Contents", [])]
+            token = response.get("NextContinuationToken")
+            if not token:
+                break
+        for start in range(0, len(keys), 1000):
+            self._s3.delete_objects(Bucket=self._network_volume_id, Delete={"Objects": keys[start:start + 1000]})
+        if keys:
+            logging.info(f"Removed {len(keys)} leftover script file(s) from the network volume")
 
     def reset(self, config_path: str = "~/.ssh/config.runpod_cli") -> None:
         """Delete all SSH config files written by runpod_cli and restart the alias numbering."""

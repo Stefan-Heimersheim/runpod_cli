@@ -53,6 +53,7 @@ def test_create_resets_only_when_no_pods_exist(manager, monkeypatch, pods, expec
     monkeypatch.setattr(RunPodManager, "reset", lambda self: reset_calls.append(True))
     manager._api.create_pod.side_effect = RuntimeError("stop before provisioning")
     manager._s3 = Mock()
+    manager._s3.list_objects_v2.return_value = {}
     manager._network_volume_id = "vol"
     manager._region = "EU"
     with pytest.raises(RuntimeError, match="stop before provisioning"):
