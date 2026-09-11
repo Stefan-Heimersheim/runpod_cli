@@ -71,18 +71,19 @@ pip install -r requirements.txt
 Include ~/.ssh/config.runpod_cli
 ```
 
-2. Copy `.env.example` to `~/.config/runpod_cli/.env` and add your RunPod credentials:
+3. Copy `.env.example` to `~/.config/runpod_cli/.env` and add your RunPod credentials:
 ```bash
 mkdir -p ~/.config/runpod_cli
 cp .env.example ~/.config/runpod_cli/.env
 ```
 
-3. Fill the following variables in `~/.config/runpod_cli/.env`:
+4. Fill the following variables in `~/.config/runpod_cli/.env`:
 - `RUNPOD_API_KEY` – your RunPod API key
 - `RUNPOD_NETWORK_VOLUME_ID` – your network volume ID
 - `RUNPOD_S3_ACCESS_KEY_ID` – S3 access key for the volume
 - `RUNPOD_S3_SECRET_KEY` – S3 secret key for the volume
 - (Optional) `GIT_NAME`, `GIT_EMAIL` – global git config on the pod
+- (Optional) `RPC_DEFAULT_*` – default values for `rpc create` (see below)
 
 *Note: If you use a RunPod team, the team account needs to create those API keys.*
 
@@ -110,6 +111,23 @@ Create a dev pod with two A100 GPUs for 4 hours (adjust PCIe to SXM if needed):
 ```bash
 rpc create --gpu_type "A100 PCIe" --runtime 240 --gpu_count 2
 ```
+
+### Changing the default values
+
+The defaults for `rpc create` can be changed with `RPC_DEFAULT_*` variables in
+your `.env` file; explicit CLI flags always take precedence. For example:
+
+```
+RPC_DEFAULT_GPU_TYPE=A100 PCIe
+RPC_DEFAULT_RUNTIME=240
+RPC_DEFAULT_SSH_PUBLIC_KEY_PATH=~/.ssh/id_ed25519.pub
+```
+
+`.env.example` lists all supported variables (GPU type, runtime, GPU count,
+CPUs, memory, disk, image, agent forwarding, SSH public key path(s), and a
+custom bashrc line). `RPC_DEFAULT_SSH_PUBLIC_KEY_PATH` accepts the same
+space-separated paths and wildcards as `--ssh_keys`; without it, the SSH
+keys from your RunPod account are used.
 
 ## GPU catalog
 
@@ -209,7 +227,3 @@ with ipython>=9.0 which will produce the following error:
 ```
 ERROR  | Uncaught exception | <class 'TypeError'>; Inspector.__init__() missing 1 required keyword-only argument: 'theme_name';
 ```
-
-## Future features & improvements
-- Allow user to configre an SSH_PUBLIC_KEY_PATH in .env
-- Create a .config/runpod_cli/config file to change the default values (e.g. GPU type, runtime, etc.)
