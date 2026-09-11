@@ -75,9 +75,13 @@ def get_setup_user(
 
         CUSTOM_BASHRC_SETUP
 
-        # Git configuration
-        git config --global user.email "GIT_EMAIL"
-        git config --global user.name "GIT_NAME"
+        # Git configuration (skip empty values, which would break committing on the pod)
+        if [ -n "GIT_EMAIL" ]; then
+            git config --global user.email "GIT_EMAIL"
+        fi
+        if [ -n "GIT_NAME" ]; then
+            git config --global user.name "GIT_NAME"
+        fi
         git config --global init.defaultBranch main
 
         # Install Claude Code and Codex
@@ -138,10 +142,14 @@ def get_start(runpodcli_path: str) -> Tuple[str, str]:
                 fi
 
                 if [ ! -f /etc/ssh/ssh_host_dsa_key ]; then
-                    ssh-keygen -t dsa -f /etc/ssh/ssh_host_dsa_key -q -N ''
-                    echo "DSA key fingerprint:"
-                    ssh-keygen -lf /etc/ssh/ssh_host_dsa_key.pub
-                    cp /etc/ssh/ssh_host_dsa_key.pub RUNPODCLI_PATH/ssh_dsa_host_key
+                    # DSA was removed in OpenSSH >= 9.8; don't let set -e kill the pod setup
+                    if ssh-keygen -t dsa -f /etc/ssh/ssh_host_dsa_key -q -N ''; then
+                        echo "DSA key fingerprint:"
+                        ssh-keygen -lf /etc/ssh/ssh_host_dsa_key.pub
+                        cp /etc/ssh/ssh_host_dsa_key.pub RUNPODCLI_PATH/ssh_dsa_host_key
+                    else
+                        echo "DSA host key generation not supported, skipping"
+                    fi
                 fi
 
                 if [ ! -f /etc/ssh/ssh_host_ecdsa_key ]; then
@@ -188,7 +196,7 @@ def get_terminate(runpodcli_path: str) -> Tuple[str, str]:
     return "terminate_pod.sh", textwrap.dedent(
         r"""
         #!/bin/bash
-        exec >> RUNPODCLI_PATH/log.txt | tee -a RUNPODCLI_PATH/log.txt 2>&1 # logging
+        exec >> RUNPODCLI_PATH/log.txt 2>&1 # logging
         echo "=== $(date -Iseconds) terminate_pod.sh ==="
 
         if [ "$(id -u)" -ne 0 ]; then
