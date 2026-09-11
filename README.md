@@ -110,7 +110,7 @@ rpc create --gpu_type "RTX A4000" --runtime 60
 
 Create a dev pod with two A100 GPUs for 4 hours (adjust PCIe to SXM if needed):
 ```bash
-rpc create --gpu_type "A100 PCIe" --runtime 240 --gpu_count 2
+rpc create --gpu_type "A100 PCIe" --runtime 240 --num_gpus 2
 ```
 
 ### Changing the default values
