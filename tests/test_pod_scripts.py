@@ -26,6 +26,13 @@ def test_terminate_logging_redirects_stderr_without_dead_tee():
     assert "tee" not in script
 
 
+def test_terminate_uses_rest_v2_with_key_in_header():
+    _, script = get_terminate("/network/test")
+    assert 'https://api.runpod.io/v2/pods/${RUNPOD_POD_ID}' in script
+    assert "graphql" not in script
+    assert "api_key=" not in script  # the key travels in the Authorization header, not the URL
+
+
 def git_config_section(git_email, git_name):
     _, script = get_setup_user("/network/test", git_email, git_name)
     return script.split("# Git configuration")[1].split("# Install Claude Code")[0]

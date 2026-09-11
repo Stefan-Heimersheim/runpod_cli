@@ -12,7 +12,7 @@ import fire
 from dotenv import load_dotenv
 
 try:
-    from .api import RunPodAPIError, RunPodGraphQL
+    from .api import RunPodAPIError, RunPodAPI
     from .utils import (
         DEFAULT_IMAGE_NAME,
         get_setup_root,
@@ -21,7 +21,7 @@ try:
         get_terminate,
     )
 except ImportError:
-    from api import RunPodAPIError, RunPodGraphQL  # type: ignore
+    from api import RunPodAPIError, RunPodAPI  # type: ignore
     from utils import (  # type: ignore
         DEFAULT_IMAGE_NAME,
         get_setup_root,
@@ -96,12 +96,12 @@ class RunPodManager:
                 raise FileExistsError(f"Multiple .env files found in {env_paths}")
             load_dotenv(override=True, dotenv_path=os.path.expanduser(env_paths[env_exists.index(True)]))
 
-        self._api = RunPodGraphQL(getenv("RUNPOD_API_KEY"), team_id=os.getenv("RUNPOD_TEAM_ID"))
+        self._api = RunPodAPI(getenv("RUNPOD_API_KEY"), team_id=os.getenv("RUNPOD_TEAM_ID"))
         self._network_volume_id: str = getenv("RUNPOD_NETWORK_VOLUME_ID")
         s3_access_key_id = getenv("RUNPOD_S3_ACCESS_KEY_ID")
         s3_secret_key = getenv("RUNPOD_S3_SECRET_KEY")
         volume_info = self._api.get_network_volume(self._network_volume_id)
-        self._region = volume_info["dataCenterId"]
+        self._region = volume_info["dataCenter"]
         s3_endpoint_url = f"https://s3api-{self._region.lower()}.runpod.io/"
         self._s3 = boto3.client(
             "s3",
@@ -130,28 +130,27 @@ class RunPodManager:
         raise RuntimeError("Pod provisioning failed")
 
     def _get_public_ip_and_port(self, pod: Dict) -> Tuple[str, int]:
-        public_ips = [i for i in pod["runtime"]["ports"] if i["isIpPublic"]]
-        if len(public_ips) != 1:
-            raise ValueError(f"Expected 1 public IP, got {public_ips}")
-        ip = public_ips[0].get("ip")
-        port = public_ips[0].get("publicPort")
-        if not ip or port is None:
-            raise ValueError(f"Expected public IP and port, got {ip} and {port} from {public_ips}")
-        return str(ip), int(port)
+        # v2 runtime ports are {private, public, type, ip}; the pod's sshd
+        # listens on 22/tcp, so that mapping is the one to put in SSH config
+        publics = [p for p in pod["runtime"]["ports"] if p.get("ip") and p.get("public")]
+        candidates = [p for p in publics if p.get("type") == "tcp" and p.get("private") == 22] or publics
+        if len(candidates) != 1:
+            raise ValueError(f"Expected 1 public IP, got {candidates}")
+        return str(candidates[0]["ip"]), int(candidates[0]["public"])
 
     def _parse_time_remaining(self, pod: Dict) -> str:
         _sleep_re = re.compile(r"\bsleep\s+(\d+)\b")
-        _date_re = re.compile(r":\s*(\w{3}\s+\w{3}\s+\d{2}\s+\d{4}\s+\d{2}:\d{2}:\d{2})\s+GMT")
         start_dt = None
         sleep_secs = None
-        last_status_change = pod.get("lastStatusChange", "")
-        if isinstance(last_status_change, str):
-            match = _date_re.search(last_status_change)
-            if match:
-                start_dt = datetime.strptime(match.group(1), "%a %b %d %Y %H:%M:%S").replace(tzinfo=timezone.utc)
-        docker_args = pod.get("dockerArgs", "")
-        if isinstance(docker_args, str):
-            match = _sleep_re.search(docker_args)
+        started_at = pod.get("startedAt")
+        if isinstance(started_at, str) and started_at:
+            try:
+                start_dt = datetime.fromisoformat(started_at.replace("Z", "+00:00")).astimezone(timezone.utc)
+            except ValueError:
+                pass
+        args = pod.get("args", "")
+        if isinstance(args, str):
+            match = _sleep_re.search(args)
             if match:
                 sleep_secs = int(match.group(1))
         if start_dt is not None and sleep_secs is not None:
@@ -201,8 +200,15 @@ class RunPodManager:
                 public_ip, public_port = self._get_public_ip_and_port(pod)
                 logging.info(f"  Public IP: {public_ip}")
                 logging.info(f"  Public port: {public_port}")
-                logging.info(f"  GPUs: {pod.get('gpuCount')} x {pod.get('machine', {}).get('gpuDisplayName')}")
-                for key in ["memoryInGb", "vcpuCount", "containerDiskInGb", "volumeMountPath", "costPerHr"]:
+                hardware = pod.get("gpu") or pod.get("cpu") or {}
+                if pod.get("gpu"):
+                    logging.info(f"  GPUs: {hardware.get('count')} x {hardware.get('id')}")
+                logging.info(f"  vcpuCount: {hardware.get('vcpuCount')}")
+                logging.info(f"  memory: {hardware.get('memory')} GB")
+                network_mounts = (pod.get("mounts") or {}).get("network") or []
+                if network_mounts:
+                    logging.info(f"  volumeMountPath: {network_mounts[0].get('path')}")
+                for key in ["disk", "cost", "status"]:
                     logging.info(f"  {key}: {pod.get(key)}")
             logging.info("")
 

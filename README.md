@@ -4,6 +4,8 @@ A command-line tool for managing RunPod instances via the RunPod API, based on
 [Apollo Research's original runpod_cli tool](https://github.com/ApolloResearch/runpod_cli/tree/legacy).
 
 This version makes several changes:
+- Talks to **RunPod's REST v2 API** (`api.runpod.io/v2`); GraphQL is used only for
+  account queries (SSH keys, teams) that have no v2 equivalent yet.
 - Uses **RunPod’s S3 API** to provision startup scripts & host keys (no manual volume setup).
 - Uses the **official RunPod Docker image** by default (often faster to pull).
 - Installs a curated set of **system Python packages** on startup using `uv --system` on the fast

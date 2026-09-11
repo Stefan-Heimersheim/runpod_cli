@@ -1,4 +1,4 @@
-"""GraphQL API client for RunPod."""
+"""RunPod API client: REST v2, with GraphQL only for account queries v2 does not cover."""
 
 import logging
 import time
@@ -6,8 +6,17 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
+RUNPOD_REST_URL = "https://api.runpod.io/v2"
+RUNPOD_GPU_CATALOG_URL = f"{RUNPOD_REST_URL}/catalog/gpus"
+# Account fields (pubKey, teams) have no REST v2 equivalent yet. rp-migrate: keep-v1 file
 RUNPOD_GRAPHQL_URL = "https://api.runpod.io/graphql"
-RUNPOD_GPU_CATALOG_URL = "https://api.runpod.io/v2/catalog/gpus"
+
+# Error messages that mean "retry later", not "bad request"
+CAPACITY_MARKERS = (
+    "no longer any instances available",
+    "no instances available",
+    "not enough capacity",
+)
 
 
 class RunPodAPIError(RuntimeError):
@@ -62,8 +71,8 @@ def select_cpu_instance(min_vcpus: int, min_memory_gb: int) -> str:
     return candidates[0][0]
 
 
-class RunPodGraphQL:
-    """GraphQL API client for RunPod."""
+class RunPodAPI:
+    """RunPod REST v2 client (GraphQL only where v2 has no equivalent)."""
 
     def __init__(self, api_key: str, team_id: Optional[str] = None) -> None:
         self._api_key = api_key
@@ -74,19 +83,35 @@ class RunPodGraphQL:
         if team_id:
             self._headers["x-team-id"] = team_id
 
-    def _request(self, query: str, variables: Optional[Dict[str, Any]] = None) -> Dict:
-        payload: Dict[str, Any] = {"query": query}
-        if variables:
-            payload["variables"] = variables
-        response = requests.post(RUNPOD_GRAPHQL_URL, headers=self._headers, json=payload)
+    def _rest(self, method: str, path: str, payload: Optional[Dict[str, Any]] = None) -> Any:
+        try:
+            response = requests.request(method, f"{RUNPOD_REST_URL}{path}", headers=self._headers, json=payload, timeout=60)
+        except requests.RequestException as error:
+            raise RunPodAPIError(f"RunPod API request failed: {error}") from error
+        if response.ok:
+            return response.json() if response.content else None
+        # REST v2 errors are {"title", "status", "detail", "errors": [...]}
+        try:
+            body = response.json()
+            detail = body.get("detail") or response.text
+            field_errors = "; ".join(str(e) for e in body.get("errors") or [])
+            message = f"{body.get('title', 'RunPod API error')} ({response.status_code}): {detail}"
+            if field_errors:
+                message += f" [{field_errors}]"
+        except ValueError:
+            message = f"RunPod API error ({response.status_code}): {response.text}"
+        if any(marker in message.lower() for marker in CAPACITY_MARKERS):
+            raise RunPodCapacityError(message)
+        raise RunPodAPIError(message)
+
+    def _graphql(self, query: str) -> Dict:
+        # rp-migrate: keep-v1 — used only for account fields with no REST v2 route
+        response = requests.post(RUNPOD_GRAPHQL_URL, headers=self._headers, json={"query": query})
         if response.status_code != 200:
             raise RunPodAPIError(f"RunPod API error ({response.status_code}): {response.text}")
         result = response.json()
         if result.get("errors"):
             messages = [error.get("message", "Unknown API error") for error in result["errors"]]
-            capacity_message = "there are no longer any instances available with the requested specifications"
-            if all(message.lower().startswith(capacity_message) for message in messages):
-                raise RunPodCapacityError("; ".join(messages))
             raise RunPodAPIError("; ".join(messages))
         return result.get("data", {})
 
@@ -110,72 +135,10 @@ class RunPodGraphQL:
         return gpu_types
 
     def get_pods(self) -> List[Dict]:
-        query = """
-        query Pods {
-          myself {
-            pods {
-              id
-              name
-              dockerArgs
-              lastStatusChange
-              runtime {
-                uptimeInSeconds
-                ports {
-                  ip
-                  isIpPublic
-                  privatePort
-                  publicPort
-                  type
-                }
-              }
-              gpuCount
-              memoryInGb
-              vcpuCount
-              containerDiskInGb
-              volumeMountPath
-              costPerHr
-              machine {
-                gpuDisplayName
-              }
-            }
-          }
-        }
-        """
-        data = self._request(query)
-        return data.get("myself", {}).get("pods", [])
+        return self._rest("GET", "/pods")["pods"]
 
     def get_pod(self, pod_id: str) -> Dict:
-        query = """
-        query Pod($input: PodFilter) {
-          pod(input: $input) {
-            id
-            name
-            dockerArgs
-            lastStatusChange
-            runtime {
-              uptimeInSeconds
-              ports {
-                ip
-                isIpPublic
-                privatePort
-                publicPort
-                type
-              }
-            }
-            gpuCount
-            memoryInGb
-            vcpuCount
-            containerDiskInGb
-            volumeMountPath
-            costPerHr
-            machine {
-              gpuDisplayName
-            }
-          }
-        }
-        """
-        data = self._request(query, {"input": {"podId": pod_id}})
-        return data.get("pod", {})
+        return self._rest("GET", f"/pods/{pod_id}")
 
     def create_pod(
         self,
@@ -199,114 +162,62 @@ class RunPodGraphQL:
         selected instance type based on min_vcpu_count and min_memory_in_gb.
         """
         if gpu_type_id is None:
-            # CPU-only pod
+            # CPU-only pod: v2 takes a flavor id plus a vCPU count; memory
+            # follows from the flavor (c=2, g=4, m=8 GB per vCPU).
             instance_id = select_cpu_instance(min_vcpu_count, min_memory_in_gb)
-            query = """
-            mutation DeployCpuPod($input: deployCpuPodInput!) {
-              deployCpuPod(input: $input) {
-                id
-                imageName
-                machineId
-              }
+            flavor, vcpus, _memory = next(entry for entry in CPU_INSTANCES if entry[0] == instance_id)
+            payload: Dict[str, Any] = {
+                "name": name,
+                "image": image_name,
+                "cpu": {"id": flavor.split("-")[0], "vcpuCount": vcpus},
+                "disk": min(container_disk_in_gb, 20),  # CPU pods max 20GB
             }
-            """
-            variables: Dict[str, Any] = {
-                "input": {
-                    "name": name,
-                    "imageName": image_name,
-                    "instanceId": instance_id,
-                    "containerDiskInGb": min(container_disk_in_gb, 20),  # CPU pods max 20GB
-                }
-            }
-            result_key = "deployCpuPod"
         else:
-            # GPU pod
-            query = """
-            mutation PodFindAndDeployOnDemand($input: PodFindAndDeployOnDemandInput) {
-              podFindAndDeployOnDemand(input: $input) {
-                id
-                imageName
-                machineId
-              }
+            # GPU pod: vCPU/memory minimums are per GPU in v2 (equivalent to
+            # the old pod-wide minimums for single-GPU pods)
+            payload = {
+                "name": name,
+                "image": image_name,
+                "cloud": cloud_type,
+                "gpu": {
+                    "id": gpu_type_id,
+                    "count": gpu_count,
+                    "minVcpuCountPerGpu": min_vcpu_count,
+                    "minRamPerGpu": min_memory_in_gb,
+                },
+                "disk": container_disk_in_gb,
             }
-            """
-            variables = {
-                "input": {
-                    "name": name,
-                    "imageName": image_name,
-                    "gpuTypeId": gpu_type_id,
-                    "cloudType": cloud_type,
-                    "gpuCount": gpu_count,
-                    "containerDiskInGb": container_disk_in_gb,
-                    "minVcpuCount": min_vcpu_count,
-                    "minMemoryInGb": min_memory_in_gb,
-                }
-            }
-            result_key = "podFindAndDeployOnDemand"
 
         # Shared optional fields
         if docker_args:
-            variables["input"]["dockerArgs"] = docker_args
+            payload["args"] = docker_args
         if ports:
-            variables["input"]["ports"] = ports
-        if volume_mount_path:
-            variables["input"]["volumeMountPath"] = volume_mount_path
+            payload["ports"] = [port.strip() for port in ports.split(",")]
         if network_volume_id:
-            variables["input"]["networkVolumeId"] = network_volume_id
+            if not volume_mount_path:
+                raise ValueError("volume_mount_path is required with network_volume_id (v2 has no default mount path)")
+            payload["mounts"] = {"network": [{"volumeId": network_volume_id, "path": volume_mount_path}]}
         if env:
-            variables["input"]["env"] = [{"key": k, "value": v} for k, v in env.items()]
+            payload["env"] = env
 
-        data = self._request(query, variables)
-        return data.get(result_key, {})
+        return self._rest("POST", "/pods", payload)
 
     def terminate_pod(self, pod_id: str) -> None:
-        query = """
-        mutation PodTerminate($input: PodTerminateInput!) {
-          podTerminate(input: $input)
-        }
-        """
-        self._request(query, {"input": {"podId": pod_id}})
+        self._rest("DELETE", f"/pods/{pod_id}")
 
     def get_teams(self) -> List[Dict]:
-        query = """
-        query {
-          myself {
-            teams {
-              id
-              name
-            }
-          }
-        }
-        """
-        data = self._request(query)
+        # rp-migrate: keep-v1 — teams are account data with no REST v2 route
+        data = self._graphql("query { myself { teams { id name } } }")
         return data.get("myself", {}).get("teams", [])
 
     def get_network_volume(self, volume_id: str) -> Dict:
-        query = """
-        query {
-          myself {
-            networkVolumes {
-              id
-              name
-              dataCenterId
-            }
-          }
-        }
-        """
-        data = self._request(query)
-        volumes = data.get("myself", {}).get("networkVolumes", [])
+        volumes = self._rest("GET", "/network-volumes")["networkVolumes"]
         for vol in volumes:
             if vol.get("id") == volume_id:
                 return vol
         raise ValueError(f"Network volume {volume_id} not found")
 
     def get_pub_key(self) -> Optional[str]:
-        query = """
-        query {
-          myself {
-            pubKey
-          }
-        }
-        """
-        data = self._request(query)
+        # rp-migrate: keep-v1 — account SSH keys have no REST v2 route
+        data = self._graphql("query { myself { pubKey } }")
         return data.get("myself", {}).get("pubKey")
