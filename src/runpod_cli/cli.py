@@ -340,22 +340,6 @@ class RunPodManager:
         name = name or f"{os.getenv('USER')}-{gpu_display_name}"
         runpodcli_dir = f".tmp_{name.replace(' ', '_')}"
 
-        logging.info("Creating pod with:")
-        logging.info(f"  Name: {name}")
-        logging.info(f"  Image: {image_name}")
-        logging.info(f"  Network volume ID: {self._network_volume_id}")
-        logging.info(f"  Region: {self._region}")
-        if gpu_type_id:
-            logging.info(f"  GPU Type: {gpu_display_name}")
-            logging.info(f"  GPU Count: {num_gpus}")
-        else:
-            logging.info(f"  CPU-only pod")
-        logging.info(f"  Min vCPU: {cpus}")
-        logging.info(f"  Min Memory: {memory} GB")
-        logging.info(f"  Disk: {min(disk, 20) if not gpu_type_id else disk} GB")
-        logging.info(f"  runpodcli directory: {runpodcli_dir}")
-        logging.info(f"  Time limit: {runtime} minutes")
-
         git_email = os.getenv("GIT_EMAIL", "")
         git_name = os.getenv("GIT_NAME", "")
         # Sanitized local username, used to keep per-user state apart on team-shared volumes
@@ -392,10 +376,11 @@ class RunPodManager:
             logging.info(f"Using SSH keys from: {', '.join(key_files)}")
             public_keys = "\n".join(key_contents)
         else:
-            logging.info("Using SSH keys from RunPod account")
             public_keys = self._api.get_pub_key()
         env = {"PUBLIC_KEY": public_keys} if public_keys else None
 
+        logging.info(f"Creating pod {name} ({runtime} minutes)...")
+        start = time.monotonic()
         pod = self._api.create_pod(
             name=name,
             image_name=image_name,
@@ -412,9 +397,8 @@ class RunPodManager:
         )
 
         pod_id: str = pod.get("id")  # type: ignore
-        logging.info("Pod created. Provisioning...")
         pod = self._provision_and_wait(pod_id)
-        logging.info("Pod provisioned.")
+        logging.info(f"...created and provisioned in {time.monotonic() - start:.1f}s")
 
         ip, port = self._get_public_ip_and_port(pod)
 
