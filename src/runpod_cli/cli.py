@@ -207,15 +207,25 @@ class RunPodManager:
         """List GPU names and IDs from RunPod's catalog.
 
         Args:
-            availability: Also show live pod stock (HIGH/MEDIUM/LOW/NONE), overall
-                and for your network volume's datacenter where reported.
+            availability: Also show live pod stock (HIGH/MEDIUM/LOW/NONE), overall and
+                for your network volume's datacenter; GPUs without stock data for that
+                datacenter are not rentable there and are hidden.
         """
-        for gpu_id, gpu in sorted((gpu["id"], gpu) for gpu in self._api.get_gpu_catalog()):
-            line = f"{gpu['name']}\t{gpu_id}"
-            if availability:
-                datacenters = {dc.get("id"): dc.get("availability") for dc in gpu.get("dataCenters") or []}
-                line += f"\t{gpu.get('availability') or '?'}\t{self._region}:{datacenters.get(self._region) or '?'}"
-            print(line)
+        catalog = sorted(self._api.get_gpu_catalog(), key=lambda gpu: gpu["id"])
+        if not availability:
+            for gpu in catalog:
+                print(f"{gpu['name']}\t{gpu['id']}")
+            return
+        rows = []
+        for gpu in catalog:
+            datacenters = {dc.get("id"): dc.get("availability") for dc in gpu.get("dataCenters") or []}
+            region_availability = datacenters.get(self._region)
+            if not region_availability:
+                continue
+            rows.append((gpu["name"], gpu["id"], gpu.get("availability") or "?", f"{self._region}:{region_availability}"))
+        widths = [max(len(row[column]) for row in rows) for column in range(4)] if rows else []
+        for row in rows:
+            print("  ".join(value.ljust(width) for value, width in zip(row, widths)).rstrip())
 
     def list(self, verbose: bool = False) -> None:
         """List all pods in your RunPod account.
