@@ -52,6 +52,7 @@ class RunPodManager:
         create      Create a new pod with specified parameters
         list        List all pods in your account
         terminate   Terminate a specific pod
+        reset       Delete the SSH config files written by runpod_cli
 
     Global options:
         --env       Path to the .env file (optional). If not provided, will search for .env files in default locations.
@@ -247,6 +248,15 @@ class RunPodManager:
             rpc create --ssh_keys="~/.ssh/id_ed25519.pub ~/.ssh/id_rsa.pub"
             rpc create --ssh_keys="~/.ssh/*.pub"
         """
+        # Restart the SSH alias numbering when no pods exist
+        if update_ssh_config:
+            logging.info("Checking for existing pods...")
+            start = time.monotonic()
+            pods = self._api.get_pods()
+            logging.info(f"...found {len(pods)} pod(s) in {time.monotonic() - start:.1f}s")
+            if not pods:
+                self.reset()
+
         # Handle CPU-only pods (convert to str in case Fire passes an int like 4090)
         if gpu_type is None or str(gpu_type).upper() == "CPU":
             gpu_type_id = None
@@ -339,9 +349,9 @@ class RunPodManager:
             time.sleep(5)
             self._update_known_hosts_file(ip, port, runpodcli_dir)
 
-    def _generate_ssh_config(self, ip: str, port: int, forward_agent: bool = False) -> str:
+    def _generate_ssh_config(self, ip: str, port: int, forward_agent: bool = False, host_aliases: str = "runpod") -> str:
         return textwrap.dedent(f"""
-            Host runpod
+            Host {host_aliases}
               HostName {ip}
               User user
               Port {port}
@@ -350,10 +360,29 @@ class RunPodManager:
         """).strip()
 
     def _write_ssh_config(self, ip: str, port: int, forward_agent: bool, config_path: str = "~/.ssh/config.runpod_cli") -> None:
-        runpod_config = self._generate_ssh_config(ip=ip, port=port, forward_agent=forward_agent)
-        with open(os.path.expanduser(config_path), "w") as f:
-            f.write(runpod_config)
+        # Each pod gets its own numbered config file and `runpod` lives in its
+        # own default file; the main file only accumulates Include lines, so
+        # nothing is ever read back.
+        path = os.path.expanduser(config_path)
+        numbers = [int(suffix) for name in glob.glob(f"{path}.*") if (suffix := name.rsplit(".", 1)[1]).isdigit()]
+        number = max(numbers, default=0) + 1
+        with open(f"{path}.{number}", "w") as dest:
+            dest.write(self._generate_ssh_config(ip=ip, port=port, forward_agent=forward_agent, host_aliases=f"runpod{number}"))
+        with open(f"{path}.default", "w") as dest:  # `runpod` always points to the most recent pod
+            dest.write(self._generate_ssh_config(ip=ip, port=port, forward_agent=forward_agent, host_aliases="runpod"))
+        # "w" on the first pod also clears any entry written by older versions
+        with open(path, "w" if number == 1 else "a") as dest:
+            if number == 1:
+                dest.write(f"Include {config_path}.default\n")
+            dest.write(f"Include {config_path}.{number}\n")
         logging.info(f"SSH config at {config_path} updated")
+        logging.info(f"Connect with: ssh runpod (or: ssh runpod{number})")
+
+    def reset(self, config_path: str = "~/.ssh/config.runpod_cli") -> None:
+        """Delete all SSH config files written by runpod_cli and restart the alias numbering."""
+        for name in glob.glob(os.path.expanduser(config_path) + "*"):
+            os.remove(name)
+            logging.info(f"Removed {name}")
 
     def _update_known_hosts_file(self, public_ip: str, port: int, runpodcli_dir: str) -> None:
         host_keys: List[Tuple[str, str]] = []

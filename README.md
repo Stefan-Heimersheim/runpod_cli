@@ -89,6 +89,7 @@ You can run the CLI either as:
 - `rpc create` — Create a pod (defaults: 1× **RTX A4000**, **60 minutes**).
 - `rpc list` — List your pods.
 - `rpc terminate` — Terminate a specific pod.
+- `rpc reset` — Delete the SSH config files written by runpod_cli.
 
 ### Examples
 Create a dev pod with one A4000 GPU for 1 hour (these are also the default values):
@@ -101,6 +102,26 @@ Create a dev pod with two A100 GPUs for 4 hours (adjust PCIe to SXM if needed):
 ```bash
 rpc create --gpu_type "A100 PCIe" --runtime 240 --gpu_count 2
 ```
+
+## Multiple pod SSH hosts
+
+Each pod gets a numbered SSH alias: pod N is written to its own file
+`~/.ssh/config.runpod_cli.N` as `runpodN`, the `runpod` alias always points
+to the most recent pod (kept in `~/.ssh/config.runpod_cli.default`), and
+`~/.ssh/config.runpod_cli` contains only `Include` lines for these files:
+
+```bash
+rpc create
+rpc create
+ssh runpod1  # first pod
+ssh runpod   # most recent pod (same as runpod2)
+```
+
+`rpc reset` deletes all of these files and restarts the numbering at
+`runpod1`; `rpc create` does this automatically when no pods exist. Use the
+`Include ~/.ssh/config.runpod_cli` configuration described above. These files
+are fully managed by runpod_cli, so manual edits may be overwritten.
+`--update_ssh_config=False` disables local config changes.
 
 ## Custom pod shell settings
 
@@ -176,5 +197,4 @@ ERROR  | Uncaught exception | <class 'TypeError'>; Inspector.__init__() missing 
 - Find a better way to wait for ssh keys to be generated than `time.sleep(5)`
 - Allow user to configre an SSH_PUBLIC_KEY_PATH in .env
 - Pre-install VS Code / Cursor server
-- Change names & ssh aliases if a user requests multiple GPUs (e.g. runpod, runpod-1, etc.)
 - Create a .config/runpod_cli/config file to change the default values (e.g. GPU type, runtime, etc.)
