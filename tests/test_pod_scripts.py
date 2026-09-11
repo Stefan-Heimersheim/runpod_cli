@@ -94,7 +94,7 @@ def test_setup_root_uses_the_ubuntu_account_and_replaces_nonempty_workspace():
     assert "if ! id ubuntu" in script and "useradd --uid 1000 --shell /bin/bash ubuntu" in script
     assert "usermod --shell /bin/bash --append --groups sudo ubuntu" in script
     assert "/home/user" not in script and "user:user" not in script and "'user ALL=" not in script
-    assert "ubuntu ALL=(ALL) NOPASSWD:ALL" in script
+    assert "> /etc/sudoers.d/ubuntu" in script and ">> /etc/sudoers" not in script
     # the image's /workspace is not empty either, so rmdir is not enough
     assert "rmdir /workspace" not in script
     assert "mountpoint -q /workspace" in script and "rm -rf /workspace" in script

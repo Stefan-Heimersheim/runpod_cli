@@ -36,7 +36,10 @@ def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, st
             ln -s VOLUME_MOUNT_PATH /workspace
         fi
 
-        echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+        # a sudoers.d file, not an /etc/sudoers edit: on images without sudo,
+        # a modified /etc/sudoers makes the later sudo install stop at a dpkg
+        # conffile prompt, leaving sudo unconfigured and apt failing thereafter
+        mkdir -p /etc/sudoers.d && echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/ubuntu && chmod 440 /etc/sudoers.d/ubuntu
         echo "export HF_HOME=/workspace/hf_home/" >> /home/ubuntu/.bashrc
         echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/ubuntu/.bashrc
         chmod a+x RUNPODCLI_PATH/terminate_pod.sh
