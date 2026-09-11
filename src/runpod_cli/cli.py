@@ -70,9 +70,12 @@ class RunPodManager:
 
     Available commands:
         create      Create a new pod with specified parameters
-        list        List all pods in your account
-        terminate   Terminate a specific pod
+        list        List all pods in your account (--verbose for IPs, hardware, cost)
+        gpus        List GPU names and IDs from RunPod's catalog (--availability adds live stock)
+        terminate   Terminate one or more pods by ID
         reset       Delete the SSH config files written by runpod_cli
+        teams       List your RunPod teams (IDs for RUNPOD_TEAM_ID)
+        pubkey      Show the SSH public keys stored in your RunPod account
 
     Global options:
         --env       Path to the .env file (optional). If not provided, will search for .env files in default locations.
@@ -80,7 +83,7 @@ class RunPodManager:
     Examples:
         rpc create --gpu_type="RTX A4000" --runtime=60
         rpc list
-        rpc terminate --pod_id=YOUR_POD_ID
+        rpc terminate POD_ID [POD_ID ...]
         rpc --env=/path/to/custom.env list
     """
 
@@ -294,26 +297,22 @@ class RunPodManager:
         .env file (see .env.example); explicit CLI flags always take precedence.
 
         Args:
-            runtime: Time in minutes for pod to run (default: 60, RPC_DEFAULT_RUNTIME)
-            gpu_type: GPU type, or "CPU" for CPU-only pod (default: "RTX A4000", RPC_DEFAULT_GPU_TYPE)
+            runtime: Minutes the pod runs after setup (default: 60, RPC_DEFAULT_RUNTIME)
+            gpu_type: GPU name or ID from rpc gpus, or "CPU" (default: "RTX A4000", RPC_DEFAULT_GPU_TYPE)
             num_gpus: Number of GPUs (default: 1, RPC_DEFAULT_NUM_GPUS)
-            name: Name for the pod (default: "$USER-$GPU_TYPE")
-            disk: Container disk size in GB (default: 20, max 20 for CPU pods, RPC_DEFAULT_DISK)
-            cpus: Minimum vCPU count (default: 2, RPC_DEFAULT_CPUS)
-            memory: Minimum RAM in GB (default: 16, RPC_DEFAULT_MEMORY)
-            ssh_keys: Path(s) to SSH public key file(s), space-separated, supports wildcards
-                (default: use RunPod account keys, RPC_DEFAULT_SSH_PUBLIC_KEY_PATH)
-            forward_agent: Whether to forward SSH agent (default: False, RPC_DEFAULT_FORWARD_AGENT)
-            update_known_hosts: Whether to update known hosts (default: True)
-            update_ssh_config: Whether to update SSH config (default: True)
-            image_name: Docker image (default: "PyTorch 2.8.0 with CUDA 12.8.1 on Ubuntu 24.04", RPC_DEFAULT_IMAGE_NAME)
-            bashrc_line: Line to append to the pod user's ~/.bashrc (RPC_DEFAULT_BASHRC_LINE),
-                e.g. --bashrc_line='export PATH="$HOME/bin:$PATH"'
-            check_availability: Check catalog stock before creating a GPU pod and exit 75
-                without creating anything when it is NONE (default: True, RPC_DEFAULT_CHECK_AVAILABILITY)
-            skip_checks: Skip the existing-pod check and the GPU catalog lookup (including the
-                availability preflight); gpu_type must then be an exact catalog ID such as
-                "NVIDIA RTX A4000" (default: False, RPC_DEFAULT_SKIP_CHECKS)
+            name: Pod name (default: "$USER-$GPU_TYPE")
+            disk: Container disk in GB, max 20 for CPU pods (default: 20, RPC_DEFAULT_DISK)
+            cpus: Minimum vCPUs per GPU (default: 2, RPC_DEFAULT_CPUS)
+            memory: Minimum RAM in GB per GPU (default: 16, RPC_DEFAULT_MEMORY)
+            ssh_keys: Public key file(s), space-separated, wildcards ok (default: RunPod account keys, RPC_DEFAULT_SSH_PUBLIC_KEY_PATH)
+            forward_agent: Add ForwardAgent to the SSH config (default: False, RPC_DEFAULT_FORWARD_AGENT)
+            update_known_hosts: Add the pod's host keys to ~/.ssh/known_hosts.runpod_cli (default: True)
+            update_ssh_config: Write the runpod/runpodN aliases to ~/.ssh/config.runpod_cli (default: True)
+            volume_mount_path: Where the network volume is mounted on the pod (default: /network, /workspace links to it)
+            image_name: Docker image (default: RunPod PyTorch 2.8.0 / CUDA 12.8.1 / Ubuntu 24.04, RPC_DEFAULT_IMAGE_NAME)
+            bashrc_line: Line appended to the pod user's ~/.bashrc, e.g. 'export EDITOR=vim' (RPC_DEFAULT_BASHRC_LINE)
+            check_availability: Exit 75 before creating when the catalog reports no stock (default: True, RPC_DEFAULT_CHECK_AVAILABILITY)
+            skip_checks: Skip the existing-pod check and catalog lookup; gpu_type must be an exact ID (default: False, RPC_DEFAULT_SKIP_CHECKS)
 
         Example:
             rpc create -r 60 -g "A100 SXM"
