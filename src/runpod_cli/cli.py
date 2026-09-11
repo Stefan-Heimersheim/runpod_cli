@@ -429,7 +429,7 @@ class RunPodManager:
         return textwrap.dedent(f"""
             Host {host_aliases}
               HostName {ip}
-              User user
+              User ubuntu
               Port {port}
               UserKnownHostsFile ~/.ssh/known_hosts ~/.ssh/known_hosts.runpod_cli
               {"ForwardAgent yes" if forward_agent else ""}
