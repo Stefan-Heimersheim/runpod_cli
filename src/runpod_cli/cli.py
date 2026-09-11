@@ -340,8 +340,11 @@ class RunPodManager:
             self._write_ssh_config(ip, port, forward_agent)
 
         if update_known_hosts:
-            time.sleep(5)
-            self._update_known_hosts_file(ip, port, runpodcli_dir)
+            if public_keys:
+                self._update_known_hosts_file(ip, port, runpodcli_dir)
+            else:
+                # start_pod.sh only generates host keys when PUBLIC_KEY is set
+                logging.info("No SSH public keys, skipping known_hosts update")
 
     def _generate_ssh_config(self, ip: str, port: int, forward_agent: bool = False, host_aliases: str = "runpod") -> str:
         return textwrap.dedent(f"""
@@ -378,7 +381,24 @@ class RunPodManager:
             os.remove(name)
             logging.info(f"Removed {name}")
 
+    def _wait_for_host_keys(self, runpodcli_dir: str, timeout: float = 120.0, poll_interval: float = 2.0) -> None:
+        # start_pod.sh uploads the ed25519 host key last, so once it appears
+        # in S3 all host keys are available.
+        logging.info("Waiting for SSH host keys...")
+        start = time.monotonic()
+        while True:
+            try:
+                self._s3.head_object(Bucket=self._network_volume_id, Key=f"{runpodcli_dir}/ssh_ed25519_host_key")
+                logging.info(f"...host keys available after {time.monotonic() - start:.1f}s")
+                return
+            except Exception:
+                if time.monotonic() - start >= timeout:
+                    logging.warning(f"No SSH host keys after {timeout:.0f}s; adding whichever keys exist")
+                    return
+                time.sleep(poll_interval)
+
     def _update_known_hosts_file(self, public_ip: str, port: int, runpodcli_dir: str) -> None:
+        self._wait_for_host_keys(runpodcli_dir)
         host_keys: List[Tuple[str, str]] = []
         for file in ["ssh_ed25519_host_key", "ssh_ecdsa_host_key", "ssh_rsa_host_key", "ssh_dsa_host_key"]:
             try:
