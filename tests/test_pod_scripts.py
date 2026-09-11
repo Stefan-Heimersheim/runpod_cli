@@ -37,7 +37,7 @@ def test_fast_setup_runs_before_slow_installs():
     for slow in ["claude.ai/install.sh", "uv pip install", "plotly_get_chrome", "apt install gh"]:
         assert slow not in setup_user and slow in install
     # user-level pieces run as the pod user via su, everything else as root
-    assert "su -c 'curl -fsSL https://claude.ai/install.sh | bash' user" in install
+    assert "su -c 'curl -fsSL https://claude.ai/install.sh | bash' ubuntu" in install
     assert not re.search(r"^\s*sudo ", install, re.M)  # root needs no sudo prefix
     # install.sh order: urgent tools, then agents, then the remaining apt work
     assert install.index("tmux git rsync curl sudo nano") < install.index("claude.ai/install.sh") < install.index("apt-get upgrade")
@@ -84,3 +84,30 @@ def test_dsa_keygen_failure_does_not_abort_start_script():
     # start_pod.sh runs under set -e; a plain ssh-keygen -t dsa call would
     # abort pod setup on OpenSSH >= 9.8, which removed DSA support
     assert "if ssh-keygen -t dsa" in script
+
+
+def test_setup_root_uses_the_ubuntu_account_and_replaces_nonempty_workspace():
+    _, script = get_setup_root("/network/test", "/network")
+    # Ubuntu 24.04 images ship an "ubuntu" account at UID 1000, which made the
+    # old `useradd --uid 1000 user` fail and left the pod without a login user;
+    # the pod user is now "ubuntu", created only on images that lack it
+    assert "if ! id ubuntu" in script and "useradd --uid 1000 --shell /bin/bash ubuntu" in script
+    assert "usermod --shell /bin/bash --append --groups sudo ubuntu" in script
+    assert "/home/user" not in script and "user:user" not in script and "'user ALL=" not in script
+    assert "> /etc/sudoers.d/ubuntu" in script and ">> /etc/sudoers" not in script
+    # the image's /workspace is not empty either, so rmdir is not enough
+    assert "rmdir /workspace" not in script
+    assert "mountpoint -q /workspace" in script and "rm -rf /workspace" in script
+
+
+def test_every_pod_script_runs_user_steps_as_ubuntu():
+    for name, script in [get_install("/network/test"), get_start("/network/test"), get_terminate("/network/test")]:
+        assert "/home/user" not in script, name
+        assert not re.search(r"\bsu -c .* user$", script, re.M), name
+
+
+def test_install_breaks_system_packages_for_pep668_images():
+    _, install = get_install("/network/test")
+    # Ubuntu 24.04 marks /usr as externally managed; without this flag uv
+    # refuses and no Python package lands on the pod
+    assert "uv pip install --system --break-system-packages" in install

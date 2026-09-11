@@ -15,23 +15,33 @@ def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, st
 
         echo "Setting up system environment..."
 
-        useradd --uid 1000 --shell /bin/bash user --groups sudo --create-home
+        # The pod user is "ubuntu" (UID 1000): Ubuntu 24.04 images already ship
+        # that account, older images need it created
+        if ! id ubuntu >/dev/null 2>&1; then
+            useradd --uid 1000 --shell /bin/bash ubuntu --create-home
+        fi
+        usermod --shell /bin/bash --append --groups sudo ubuntu
         # Set NNSIGHT_LOG_PATH to avoid https://github.com/ndif-team/nnsight/issues/495
         echo "export NNSIGHT_LOG_PATH=/root/.local/state/nnsight" >> /root/.profile
-        echo "export NNSIGHT_LOG_PATH=/home/user/.local/state/nnsight" >> /home/user/.profile
-        chown user:user /home/user/.profile
-        mkdir -p  /home/user/.ssh/
-        cat /root/.ssh/authorized_keys >> /home/user/.ssh/authorized_keys
-        chown -R user:user /home/user/.ssh
+        echo "export NNSIGHT_LOG_PATH=/home/ubuntu/.local/state/nnsight" >> /home/ubuntu/.profile
+        chown ubuntu:ubuntu /home/ubuntu/.profile
+        mkdir -p  /home/ubuntu/.ssh/
+        cat /root/.ssh/authorized_keys >> /home/ubuntu/.ssh/authorized_keys
+        chown -R ubuntu:ubuntu /home/ubuntu/.ssh
 
-        if [[ VOLUME_MOUNT_PATH != "/workspace" ]]; then
-            rmdir /workspace
+        # Point /workspace at the volume; the image may ship a non-empty
+        # /workspace (24.04 has a .cache dir), so rmdir is not enough
+        if [[ VOLUME_MOUNT_PATH != "/workspace" ]] && ! mountpoint -q /workspace; then
+            rm -rf /workspace
             ln -s VOLUME_MOUNT_PATH /workspace
         fi
 
-        echo 'user ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
-        echo "export HF_HOME=/workspace/hf_home/" >> /home/user/.bashrc
-        echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/user/.bashrc
+        # a sudoers.d file, not an /etc/sudoers edit: on images without sudo,
+        # a modified /etc/sudoers makes the later sudo install stop at a dpkg
+        # conffile prompt, leaving sudo unconfigured and apt failing thereafter
+        mkdir -p /etc/sudoers.d && echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/ubuntu && chmod 440 /etc/sudoers.d/ubuntu
+        echo "export HF_HOME=/workspace/hf_home/" >> /home/ubuntu/.bashrc
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/ubuntu/.bashrc
         chmod a+x RUNPODCLI_PATH/terminate_pod.sh
         ln -s RUNPODCLI_PATH/terminate_pod.sh /usr/local/bin/terminate_pod
 
@@ -53,8 +63,8 @@ def get_install(runpodcli_path: str) -> Tuple[str, str]:
 
         # Install Claude Code and Codex for the pod user next (they install
         # into ~/.local), so agents are usable before the slower apt work
-        su -c 'curl -fsSL https://claude.ai/install.sh | bash' user
-        su -c 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' user
+        su -c 'curl -fsSL https://claude.ai/install.sh | bash' ubuntu
+        su -c 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' ubuntu
 
         apt-get update
         apt-get upgrade -y
@@ -72,7 +82,8 @@ def get_install(runpodcli_path: str) -> Tuple[str, str]:
 
         # Install Python packages using uv
         pip install uv
-        uv pip install --system --compile-bytecode ipykernel kaleido nbformat numpy scipy scikit-learn scikit-image transformers datasets torchvision pandas matplotlib seaborn plotly jaxtyping einops tqdm ruff basedpyright umap-learn ipywidgets virtualenv  pytest git+https://github.com/callummcdougall/eindex.git transformer_lens nnsight
+        # --break-system-packages: Ubuntu 24.04 marks /usr as externally managed (PEP 668)
+        uv pip install --system --break-system-packages --compile-bytecode ipykernel kaleido nbformat numpy scipy scikit-learn scikit-image transformers datasets torchvision pandas matplotlib seaborn plotly jaxtyping einops tqdm ruff basedpyright umap-learn ipywidgets virtualenv  pytest git+https://github.com/callummcdougall/eindex.git transformer_lens nnsight
         # For plotly (kaleido) png export. Ubuntu 24.04's time_t transition
         # renamed some of these (libasound2 -> libasound2t64), so fall back
         # per package instead of letting one rename abort the whole line.
@@ -81,7 +92,7 @@ def get_install(runpodcli_path: str) -> Tuple[str, str]:
         done
         plotly_get_chrome -y
         # Create a virtual environment for the pod user
-        su -c 'uv venv ~/.venv --python $(python --version | cut -d" " -f2 | cut -d. -f1-2) --system-site-packages' user
+        su -c 'uv venv ~/.venv --python $(python --version | cut -d" " -f2 | cut -d. -f1-2) --system-site-packages' ubuntu
 
         echo "...installs completed!"
     """.replace("RUNPODCLI_PATH", runpodcli_path)
@@ -103,7 +114,7 @@ def get_setup_user(
         # Persist shell history and coding-agent state on the network volume,
         # so they survive pod termination. /workspace always points at the
         # volume (setup_root.sh symlinks it when the mount path differs).
-        # Every pod runs as "user", so the files are keyed by the local
+        # Every pod runs as "ubuntu", so the files are keyed by the local
         # username of the pod creator to keep team members' state separate.
         echo 'export HISTFILE=/workspace/.bash_history_LOCAL_USER' >> ~/.bashrc
         echo 'export HISTSIZE=10000000' >> ~/.bashrc
@@ -209,7 +220,7 @@ def get_start(runpodcli_path: str) -> Tuple[str, str]:
         setup_ssh
         export_env_vars
         bash RUNPODCLI_PATH/setup_root.sh
-        su -c "bash RUNPODCLI_PATH/setup_user.sh" user
+        su -c "bash RUNPODCLI_PATH/setup_user.sh" ubuntu
         echo "Fast setup finished, pod is ready to log in; installs continue..."
         bash RUNPODCLI_PATH/install.sh
 
@@ -227,9 +238,9 @@ def get_terminate(runpodcli_path: str) -> Tuple[str, str]:
 
         if [ "$(id -u)" -ne 0 ]; then
             echo "Not running as root, attempting to copy runpod env"
-            sudo cp /root/.runpod_env /home/user/.runpod_env
-            sudo chown user /home/user/.runpod_env
-            source /home/user/.runpod_env
+            sudo cp /root/.runpod_env /home/ubuntu/.runpod_env
+            sudo chown ubuntu /home/ubuntu/.runpod_env
+            source /home/ubuntu/.runpod_env
         else
             source /root/.runpod_env
         fi
