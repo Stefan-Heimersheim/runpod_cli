@@ -5,44 +5,68 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from runpod_cli.api import RunPodAPIError, RunPodCapacityError, RunPodGraphQL
+from runpod_cli.api import RunPodAPI, RunPodAPIError, RunPodCapacityError
 from runpod_cli.cli import main
+
+
+def rest_response(status_code, body):
+    response = Mock(status_code=status_code, ok=status_code < 400, content=b"x")
+    response.json.return_value = body
+    return response
 
 
 def test_capacity_error_has_readable_message():
-    message = "There are no longer any instances available with the requested specifications. Please refresh and try again."
-    response = Mock(status_code=200)
-    response.json.return_value = {"errors": [{"message": message}]}
-    with patch("runpod_cli.api.requests.post", return_value=response):
+    detail = "There are no longer any instances available with the requested specifications. Please refresh and try again."
+    response = rest_response(500, {"title": "Internal Server Error", "status": 500, "detail": detail})
+    with patch("runpod_cli.api.requests.request", return_value=response):
         with pytest.raises(RunPodCapacityError) as error:
-            RunPodGraphQL("test").create_pod("test", "image", "gpu")
-    assert str(error.value) == message
+            RunPodAPI("test").create_pod("test", "image", "gpu")
+    assert detail in str(error.value)
     assert error.value.exit_code == 75
 
 
-@pytest.mark.parametrize("messages, expected_code", [
-    (["There are no longer any instances available with the requested specifications. Please refresh and try again."], 75),
-    (["Invalid API key"], 1),
-    (["There are no longer any instances available with the requested specifications.", "Invalid input"], 1),
+def test_validation_error_lists_field_errors():
+    # rp-migrate: ignore start — a fake 422 body quoting a legacy field name, not a call site
+    body = {"title": "Unprocessable Entity", "status": 422, "detail": "request body has an error",
+            "errors": ["property 'imageName' is unsupported"]}
+    with patch("runpod_cli.api.requests.request", return_value=rest_response(422, body)):
+        with pytest.raises(RunPodAPIError, match="imageName.*unsupported") as error:
+            # rp-migrate: ignore end
+            RunPodAPI("test").create_pod("test", "image", "gpu")
+    assert not isinstance(error.value, RunPodCapacityError)
+
+
+def test_non_json_error_is_still_readable():
+    response = Mock(status_code=502, ok=False, content=b"x", text="Bad Gateway")
+    response.json.side_effect = ValueError("not json")
+    with patch("runpod_cli.api.requests.request", return_value=response):
+        with pytest.raises(RunPodAPIError, match="502.*Bad Gateway"):
+            RunPodAPI("test").get_pods()
+
+
+@pytest.mark.parametrize("detail, expected_code", [
+    ("There are no longer any instances available with the requested specifications.", 75),
+    ("Invalid API key", 1),
 ])
-def test_process_exit_code_and_output(messages, expected_code):
+def test_process_exit_code_and_output(detail, expected_code):
     script = '''
 import logging
 from unittest.mock import Mock, patch
-from runpod_cli.api import RunPodGraphQL
+from runpod_cli.api import RunPodAPI
 from runpod_cli.cli import main
 logging.getLogger().handlers.clear()
 logging.basicConfig(format="[%(levelname)s] %(message)s")
-response = Mock(status_code=200)
-response.json.return_value = {"errors": [{"message": message} for message in MESSAGES]}
+response = Mock(status_code=500, ok=False, content=b"x")
+response.json.return_value = {"title": "Error", "status": 500, "detail": DETAIL}
 def create(*args, **kwargs):
-    RunPodGraphQL("test").create_pod("test", "image", "gpu")
-with patch("runpod_cli.api.requests.post", return_value=response), patch("runpod_cli.cli.fire.Fire", side_effect=create):
+    RunPodAPI("test").create_pod("test", "image", "gpu")
+with patch("runpod_cli.api.requests.request", return_value=response), patch("runpod_cli.cli.fire.Fire", side_effect=create):
     main()
-'''.replace("MESSAGES", repr(messages))
+'''.replace("DETAIL", repr(detail))
     result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
     assert result.returncode == expected_code
-    assert result.stderr.strip() == "[ERROR] " + "; ".join(messages)
+    assert detail in result.stderr
+    assert result.stderr.startswith("[ERROR] ")
     assert "Traceback" not in result.stderr
 
 
@@ -62,8 +86,16 @@ def test_unexpected_errors_are_not_hidden():
             main()
 
 
-def test_empty_errors_do_not_mask_success():
+def test_get_pods_unwraps_v2_envelope():
+    with patch("runpod_cli.api.requests.request", return_value=rest_response(200, {"pods": [{"id": "pod"}]})):  # rp-migrate: ignore — v2 envelope
+        assert RunPodAPI("test").get_pods() == [{"id": "pod"}]  # rp-migrate: ignore — v2 envelope unwrap
+
+
+def test_pub_key_still_uses_graphql():
+    # rp-migrate: keep-v1 start — account SSH keys have no REST v2 route
     response = Mock(status_code=200)
-    response.json.return_value = {"data": {"myself": {"pods": [{"id": "pod"}]}}, "errors": []}
-    with patch("runpod_cli.api.requests.post", return_value=response):
-        assert RunPodGraphQL("test").get_pods() == [{"id": "pod"}]
+    response.json.return_value = {"data": {"myself": {"pubKey": "ssh-ed25519 AAAA"}}}
+    with patch("runpod_cli.api.requests.post", return_value=response) as post:
+        assert RunPodAPI("test").get_pub_key() == "ssh-ed25519 AAAA"
+    assert post.call_args.args[0] == "https://api.runpod.io/graphql"
+    # rp-migrate: keep-v1 end

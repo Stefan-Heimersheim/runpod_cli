@@ -209,9 +209,8 @@ def get_terminate(runpodcli_path: str) -> Tuple[str, str]:
         fi
 
         echo "Requesting pod termination..."
-        curl --request POST \
-        --header 'content-type: application/json' \
-        --url "https://api.runpod.io/graphql?api_key=${RUNPOD_API_KEY}" \
-        --data "{\"query\": \"mutation { podTerminate(input: {podId: \\\"${RUNPOD_POD_ID}\\\"}) }\"}"
+        curl --request DELETE \
+        --header "Authorization: Bearer ${RUNPOD_API_KEY}" \
+        --url "https://api.runpod.io/v2/pods/${RUNPOD_POD_ID}"
     """.replace("RUNPODCLI_PATH", runpodcli_path)
     )
