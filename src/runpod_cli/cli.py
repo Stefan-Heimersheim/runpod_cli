@@ -15,8 +15,7 @@ try:
     from .api import RunPodAPIError, RunPodAPI
     from .utils import (
         DEFAULT_IMAGE_NAME,
-        get_install_root,
-        get_install_user,
+        get_install,
         get_setup_root,
         get_setup_user,
         get_start,
@@ -26,8 +25,7 @@ except ImportError:
     from api import RunPodAPIError, RunPodAPI  # type: ignore
     from utils import (  # type: ignore
         DEFAULT_IMAGE_NAME,
-        get_install_root,
-        get_install_user,
+        get_install,
         get_setup_root,
         get_setup_user,
         get_start,
@@ -333,8 +331,7 @@ class RunPodManager:
         scripts = [
             get_setup_root(remote_scripts_path, volume_mount_path),
             get_setup_user(remote_scripts_path, git_email, git_name, bashrc_line, local_user),
-            get_install_root(remote_scripts_path),
-            get_install_user(remote_scripts_path),
+            get_install(remote_scripts_path),
             get_start(remote_scripts_path),
             get_terminate(remote_scripts_path),
         ]

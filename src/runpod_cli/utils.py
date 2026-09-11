@@ -44,19 +44,42 @@ def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, st
     )
 
 
-def get_install_root(runpodcli_path: str) -> Tuple[str, str]:
-    return "install_root.sh", textwrap.dedent(
+def get_install(runpodcli_path: str) -> Tuple[str, str]:
+    return "install.sh", textwrap.dedent(
         r"""
         #!/bin/bash
         exec >> RUNPODCLI_PATH/log.txt 2>&1 # logging
-        echo "=== $(date -Iseconds) install_root.sh ==="
+        echo "=== $(date -Iseconds) install.sh ==="
 
         echo "Installing system packages..."
 
         apt-get upgrade -y
         apt-get install -y sudo vim ssh net-tools htop curl zip unzip libopenmpi-dev iputils-ping make fzf restic ripgrep wget pandoc poppler-utils pigz bzip2 nano locales
 
-        echo "...system packages installed!"
+        # Install Claude Code and Codex for the pod user (they install into ~/.local)
+        su -c 'curl -fsSL https://claude.ai/install.sh | bash' user
+        su -c 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' user
+
+        # Install gh
+        out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+            && mkdir -p -m 755 /etc/apt/keyrings \
+            && cat $out > /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+            && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+            && mkdir -p -m 755 /etc/apt/sources.list.d \
+            && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
+            && apt update \
+            && apt install gh -y
+
+        # Install Python packages using uv
+        pip install uv
+        uv pip install --system --compile-bytecode ipykernel kaleido nbformat numpy scipy scikit-learn scikit-image transformers datasets torchvision pandas matplotlib seaborn plotly jaxtyping einops tqdm ruff basedpyright umap-learn ipywidgets virtualenv  pytest git+https://github.com/callummcdougall/eindex.git transformer_lens nnsight
+        # For plotly (kaleido) png export
+        apt-get install -y libnss3 libatk-bridge2.0-0 libcups2 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2
+        plotly_get_chrome -y
+        # Create a virtual environment for the pod user
+        su -c 'uv venv ~/.venv --python $(python --version | cut -d" " -f2 | cut -d. -f1-2) --system-site-packages' user
+
+        echo "...installs completed!"
     """.replace("RUNPODCLI_PATH", runpodcli_path)
     )
 
@@ -106,44 +129,6 @@ def get_setup_user(
         .replace("GIT_NAME", git_name)
         .replace("CUSTOM_BASHRC_SETUP", bashrc_setup)
         .replace("LOCAL_USER", local_user)
-    )
-
-
-def get_install_user(runpodcli_path: str) -> Tuple[str, str]:
-    return "install_user.sh", textwrap.dedent(
-        r"""
-        #!/bin/bash
-        exec >> RUNPODCLI_PATH/log.txt 2>&1 # logging
-        echo "=== $(date -Iseconds) install_user.sh ==="
-
-        echo "Installing user tools and Python packages..."
-
-        # Install Claude Code and Codex
-        curl -fsSL https://claude.ai/install.sh | bash
-        curl -fsSL https://chatgpt.com/codex/install.sh | sh
-
-        # Install gh
-        (type -p wget >/dev/null || (sudo apt update && sudo apt-get install wget -y)) \
-            && sudo mkdir -p -m 755 /etc/apt/keyrings \
-            && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-            && cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
-            && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-            && sudo mkdir -p -m 755 /etc/apt/sources.list.d \
-            && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-            && sudo apt update \
-            && sudo apt install gh -y
-
-        # Install Python packages using uv
-        sudo pip install uv
-        sudo uv pip install --system --compile-bytecode ipykernel kaleido nbformat numpy scipy scikit-learn scikit-image transformers datasets torchvision pandas matplotlib seaborn plotly jaxtyping einops tqdm ruff basedpyright umap-learn ipywidgets virtualenv  pytest git+https://github.com/callummcdougall/eindex.git transformer_lens nnsight
-        # For plotly (kaleido) png export
-        sudo apt-get install -y libnss3 libatk-bridge2.0-0 libcups2 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2
-        sudo plotly_get_chrome -y
-        # Create a virtual environment for the user
-        python_version=$(python --version | cut -d' ' -f2 | cut -d'.' -f1-2)
-        uv venv ~/.venv --python $python_version --system-site-packages
-        echo "...user installs completed!"
-    """.replace("RUNPODCLI_PATH", runpodcli_path)
     )
 
 
@@ -220,8 +205,7 @@ def get_start(runpodcli_path: str) -> Tuple[str, str]:
         bash RUNPODCLI_PATH/setup_root.sh
         su -c "bash RUNPODCLI_PATH/setup_user.sh" user
         echo "Fast setup finished, pod is ready to log in; installs continue..."
-        bash RUNPODCLI_PATH/install_root.sh
-        su -c "bash RUNPODCLI_PATH/install_user.sh" user
+        bash RUNPODCLI_PATH/install.sh
 
         echo "Start script(s) finished, pod is ready to use."
     """.replace("RUNPODCLI_PATH", runpodcli_path)

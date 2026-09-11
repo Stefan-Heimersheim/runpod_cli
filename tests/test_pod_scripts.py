@@ -4,7 +4,7 @@ import subprocess
 
 import pytest
 
-from runpod_cli.utils import get_install_root, get_install_user, get_setup_root, get_setup_user, get_start, get_terminate
+from runpod_cli.utils import get_install, get_setup_root, get_setup_user, get_start, get_terminate
 
 
 @pytest.mark.parametrize(
@@ -12,8 +12,7 @@ from runpod_cli.utils import get_install_root, get_install_user, get_setup_root,
     [
         get_setup_root("/network/test", "/network"),
         get_setup_user("/network/test", "test@example.com", "Test"),
-        get_install_root("/network/test"),
-        get_install_user("/network/test"),
+        get_install("/network/test"),
         get_start("/network/test"),
         get_terminate("/network/test"),
     ],
@@ -25,16 +24,18 @@ def test_scripts_pass_bash_syntax_check(name, script):
 def test_fast_setup_runs_before_slow_installs():
     _, start = get_start("/network/test")
     order = [start.index(step) for step in
-             ["setup_root.sh", "setup_user.sh", "ready to log in", "install_root.sh", "install_user.sh"]]
+             ["setup_root.sh", "setup_user.sh", "ready to log in", "install.sh"]]
     assert order == sorted(order)
     # The slow work lives in the install scripts, not the setup scripts
     _, setup_root = get_setup_root("/network/test", "/network")
     _, setup_user = get_setup_user("/network/test", "test@example.com", "Test")
-    _, install_root = get_install_root("/network/test")
-    _, install_user = get_install_user("/network/test")
-    assert "apt-get upgrade" not in setup_root and "apt-get upgrade" in install_root
+    _, install = get_install("/network/test")
+    assert "apt-get upgrade" not in setup_root and "apt-get upgrade" in install
     for slow in ["claude.ai/install.sh", "uv pip install", "plotly_get_chrome", "apt install gh"]:
-        assert slow not in setup_user and slow in install_user
+        assert slow not in setup_user and slow in install
+    # user-level pieces run as the pod user via su, everything else as root
+    assert "su -c 'curl -fsSL https://claude.ai/install.sh | bash' user" in install
+    assert "sudo" not in install.replace("apt-get install -y sudo", "")
     # setup_user needs git for git config; setup_root provides it first
     assert "apt-get install -y tmux git rsync" in setup_root
 
