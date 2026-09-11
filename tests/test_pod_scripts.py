@@ -1,5 +1,5 @@
 import os
-import shutil
+import re
 import subprocess
 
 import pytest
@@ -30,18 +30,19 @@ def test_fast_setup_runs_before_slow_installs():
     _, setup_root = get_setup_root("/network/test", "/network")
     _, setup_user = get_setup_user("/network/test", "test@example.com", "Test")
     _, install = get_install("/network/test")
-    assert "apt-get upgrade" not in setup_root and "apt-get upgrade" in install
+    # the fast phase runs no apt (and no git) at all, so it finishes in seconds
+    assert "apt-get" not in setup_root and "apt-get" not in setup_user
+    assert "git config" not in setup_user  # .gitconfig is written directly
+    assert "apt-get upgrade" in install
     for slow in ["claude.ai/install.sh", "uv pip install", "plotly_get_chrome", "apt install gh"]:
         assert slow not in setup_user and slow in install
     # user-level pieces run as the pod user via su, everything else as root
     assert "su -c 'curl -fsSL https://claude.ai/install.sh | bash' user" in install
-    assert "sudo " not in install  # root needs no sudo; sudo itself installs early in setup_root
-    # agent installers come before the slow apt work, and their prerequisites
-    # (curl, plus sudo for early logins) install in the fast phase
-    assert install.index("claude.ai/install.sh") < install.index("apt-get upgrade")
-    assert "apt-get install -y tmux git rsync curl sudo" in setup_root
-    # setup_user needs git for git config; setup_root provides it first
-    assert "apt-get install -y tmux git rsync" in setup_root
+    assert not re.search(r"^\s*sudo ", install, re.M)  # root needs no sudo prefix
+    # install.sh order: urgent tools, then agents, then the remaining apt work
+    assert install.index("tmux git rsync curl sudo") < install.index("claude.ai/install.sh") < install.index("apt-get upgrade")
+    # urgent tools try the image's package lists before paying for apt-get update
+    assert "|| { apt-get update && apt-get install -y tmux git rsync curl sudo; }" in install
 
 
 def test_terminate_logging_redirects_stderr_without_dead_tee():
@@ -62,7 +63,6 @@ def git_config_section(git_email, git_name):
     return script.split("# Git configuration")[1]
 
 
-@pytest.mark.skipif(shutil.which("git") is None, reason="git not installed")
 def test_empty_git_identity_is_not_configured(tmp_path):
     env = dict(os.environ, HOME=str(tmp_path))
     subprocess.run(["bash"], input=git_config_section("", ""), text=True, env=env, check=True)
@@ -71,7 +71,6 @@ def test_empty_git_identity_is_not_configured(tmp_path):
     assert "defaultBranch = main" in gitconfig
 
 
-@pytest.mark.skipif(shutil.which("git") is None, reason="git not installed")
 def test_git_identity_is_configured_when_provided(tmp_path):
     env = dict(os.environ, HOME=str(tmp_path))
     subprocess.run(["bash"], input=git_config_section("test@example.com", "Test"), text=True, env=env, check=True)

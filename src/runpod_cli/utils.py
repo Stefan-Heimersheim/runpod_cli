@@ -35,9 +35,6 @@ def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, st
         chmod a+x RUNPODCLI_PATH/terminate_pod.sh
         ln -s RUNPODCLI_PATH/terminate_pod.sh /usr/local/bin/terminate_pod
 
-        apt-get update
-        apt-get install -y tmux git rsync curl sudo
-
         echo "...system setup completed!"
     """.replace("RUNPODCLI_PATH", runpodcli_path).replace("VOLUME_MOUNT_PATH", volume_mount_path)
     )
@@ -52,11 +49,18 @@ def get_install(runpodcli_path: str) -> Tuple[str, str]:
 
         echo "Installing agents, system packages, and tools..."
 
-        # Install Claude Code and Codex for the pod user first (they install
+        # Urgent tools first. Try without the slow apt-get update: it fails
+        # fast when the image ships no package lists, and skips minutes of
+        # mirror fetches when it does ship them.
+        apt-get install -y tmux git rsync curl sudo \
+            || { apt-get update && apt-get install -y tmux git rsync curl sudo; }
+
+        # Install Claude Code and Codex for the pod user next (they install
         # into ~/.local), so agents are usable before the slower apt work
         su -c 'curl -fsSL https://claude.ai/install.sh | bash' user
         su -c 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' user
 
+        apt-get update
         apt-get upgrade -y
         apt-get install -y vim ssh net-tools htop zip unzip libopenmpi-dev iputils-ping make fzf restic ripgrep wget pandoc poppler-utils pigz bzip2 nano locales
 
@@ -114,14 +118,19 @@ def get_setup_user(
 
         CUSTOM_BASHRC_SETUP
 
-        # Git configuration (skip empty values, which would break committing on the pod)
-        if [ -n "GIT_EMAIL" ]; then
-            git config --global user.email "GIT_EMAIL"
+        # Git configuration, written directly so it needs no git binary
+        # (skip empty identity values, which would break committing on the pod)
+        if [ -n "GIT_EMAIL" ] || [ -n "GIT_NAME" ]; then
+            echo '[user]' >> ~/.gitconfig
+            if [ -n "GIT_EMAIL" ]; then
+                echo '    email = GIT_EMAIL' >> ~/.gitconfig
+            fi
+            if [ -n "GIT_NAME" ]; then
+                echo '    name = GIT_NAME' >> ~/.gitconfig
+            fi
         fi
-        if [ -n "GIT_NAME" ]; then
-            git config --global user.name "GIT_NAME"
-        fi
-        git config --global init.defaultBranch main
+        echo '[init]' >> ~/.gitconfig
+        echo '    defaultBranch = main' >> ~/.gitconfig
 
         echo "...user setup completed!"
     """.replace("RUNPODCLI_PATH", runpodcli_path)
