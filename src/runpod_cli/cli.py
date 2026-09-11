@@ -13,7 +13,7 @@ import fire
 from dotenv import load_dotenv
 
 try:
-    from .api import RunPodAPIError, RunPodCapacityError, RunPodAPI
+    from .api import RunPodAPIError, RunPodCapacityError, RunPodConfigError, RunPodAPI
     from .utils import (
         DEFAULT_IMAGE_NAME,
         get_install,
@@ -23,7 +23,7 @@ try:
         get_terminate,
     )
 except ImportError:
-    from api import RunPodAPIError, RunPodCapacityError, RunPodAPI  # type: ignore
+    from api import RunPodAPIError, RunPodCapacityError, RunPodConfigError, RunPodAPI  # type: ignore
     from utils import (  # type: ignore
         DEFAULT_IMAGE_NAME,
         get_install,
@@ -40,7 +40,7 @@ logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(asctime)s: %(m
 def getenv(key: str) -> str:
     value = os.getenv(key)
     if not value:
-        raise ValueError(f"{key} not found in environment. Set it in your .env file.")
+        raise RunPodConfigError(f"{key} not found in environment. Set it in your .env file.")
     return value
 
 
@@ -57,7 +57,7 @@ def env_default(flag_value, env_var: str, fallback):
             return True
         if value.strip().lower() in ("0", "false", "no", "off"):
             return False
-        raise ValueError(f"{env_var} must be a boolean (true/false), got: {value}")
+        raise RunPodConfigError(f"{env_var} must be a boolean (true/false), got: {value}")
     if isinstance(fallback, int):
         return int(value)
     return value
@@ -173,7 +173,7 @@ class RunPodManager:
     def _get_gpu_id(self, gpu_type: str | int) -> Tuple[str, str, Dict]:
         query = str(gpu_type).strip().lower()
         if not query:
-            raise ValueError("GPU type must not be empty")
+            raise RunPodConfigError("GPU type must not be empty")
         catalog = {gpu["id"]: gpu for gpu in self._api.get_gpu_catalog()}
         gpu_types = {gpu_id: gpu["name"] for gpu_id, gpu in catalog.items()}
         # Exact IDs/names take precedence over substring matches.
@@ -183,8 +183,8 @@ class RunPodManager:
         if len(matches) == 1:
             return matches[0], gpu_types[matches[0]], catalog[matches[0]]
         if len(matches) > 1:
-            raise ValueError(f"Ambiguous GPU type: {gpu_type} matches {matches}. Use a full name or ID from rpc gpus.")
-        raise ValueError(f"Unknown GPU type: {gpu_type}. Use rpc gpus to list GPU names and IDs.")
+            raise RunPodConfigError(f"Ambiguous GPU type: {gpu_type} matches {matches}. Use a full name or ID from rpc gpus.")
+        raise RunPodConfigError(f"Unknown GPU type: {gpu_type}. Use rpc gpus to list GPU names and IDs.")
 
     def _region_availability(self, gpu_entry: Dict) -> Tuple[Optional[str], str]:
         """Best available stock signal: the volume's datacenter if reported, else overall."""
@@ -553,7 +553,7 @@ class RunPodManager:
 def main():
     try:
         fire.Fire(RunPodManager)
-    except RunPodAPIError as error:
+    except (RunPodAPIError, RunPodConfigError) as error:
         logging.error("%s", error)
         raise SystemExit(error.exit_code) from None
 

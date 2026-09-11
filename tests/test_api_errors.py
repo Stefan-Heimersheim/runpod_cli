@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from runpod_cli.api import RunPodAPI, RunPodAPIError, RunPodCapacityError
+from runpod_cli.api import RunPodAPI, RunPodAPIError, RunPodCapacityError, RunPodConfigError
 from runpod_cli.cli import main
 
 
@@ -80,9 +80,23 @@ def test_cli_reports_api_error_and_exits_unsuccessfully(caplog):
     assert all(record.exc_info is None for record in caplog.records)
 
 
+def test_cli_reports_config_errors_without_traceback(caplog):
+    with patch("runpod_cli.cli.fire.Fire", side_effect=RunPodConfigError("Ambiguous GPU type: 4000")):
+        with caplog.at_level(logging.ERROR), pytest.raises(SystemExit) as error:
+            main()
+    assert error.value.code == 1
+    assert "Ambiguous GPU type" in caplog.text and "Traceback" not in caplog.text
+
+
 def test_unexpected_errors_are_not_hidden():
     with patch("runpod_cli.cli.fire.Fire", side_effect=TypeError("bug")):
         with pytest.raises(TypeError, match="bug"):
+            main()
+
+
+def test_plain_value_errors_are_not_hidden():
+    with patch("runpod_cli.cli.fire.Fire", side_effect=ValueError("bug")):
+        with pytest.raises(ValueError, match="bug"):
             main()
 
 
