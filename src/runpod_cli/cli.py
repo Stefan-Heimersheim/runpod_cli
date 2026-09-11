@@ -1,7 +1,9 @@
 import glob
+import inspect
 import logging
 import os
 import re
+import sys
 import textwrap
 import time
 import uuid
@@ -557,8 +559,30 @@ class RunPodManager:
             self._api.terminate_pod(pod_id)
 
 
+def reject_unknown_flags(argv: List[str]) -> None:
+    """Fire only reports an unknown flag after the command has run (rpc create would already have made the pod)."""
+    words = [arg for arg in argv if not arg.startswith("-")]
+    command = getattr(RunPodManager, words[0], None) if words else None
+    if command is None:
+        return
+    params = list(inspect.signature(command).parameters)
+    for arg in argv:
+        if arg == "--":
+            return  # the rest is for Fire itself, e.g. rpc create -- --help
+        if not arg.startswith("-"):
+            continue
+        name = arg.lstrip("-").split("=", 1)[0]
+        if arg.startswith("--"):
+            known = name in params or name in ("help", "env") or (name.startswith("no") and name[2:] in params)
+        else:  # Fire's short flags: one letter, only when it starts exactly one parameter
+            known = name == "h" or (len(name) == 1 and sum(param.startswith(name) for param in params) == 1)
+        if not known:
+            raise RunPodConfigError(f"Unknown flag {arg} for rpc {words[0]} (see rpc {words[0]} --help); nothing was run")
+
+
 def main():
     try:
+        reject_unknown_flags(sys.argv[1:])
         fire.Fire(RunPodManager)
     except (RunPodAPIError, RunPodConfigError) as error:
         logging.error("%s", error)
