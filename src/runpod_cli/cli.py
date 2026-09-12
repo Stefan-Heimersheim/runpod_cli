@@ -79,7 +79,7 @@ class RunPodManager:
     Available commands:
         create      Create a new pod with specified parameters
         list        List all pods in your account (--verbose for IPs, hardware, cost)
-        gpus        List GPU names and IDs from RunPod's catalog (--availability adds live stock)
+        gpus        List RunPod's GPU catalog with VRAM, price and live stock
         terminate   Terminate one or more pods by ID
         reset       Delete the SSH config files written by runpod_cli
         teams       List your RunPod teams (IDs for RUNPOD_TEAM_ID)
@@ -211,31 +211,33 @@ class RunPodManager:
         if availability == "NONE":
             raise RunPodCapacityError(
                 f"{gpu_display_name} has no availability {scope} right now (catalog preflight; nothing was created). "
-                "Retry later, choose another GPU (rpc gpus --availability), or pass --check_availability=False to try anyway."
+                "Retry later, choose another GPU (rpc gpus), or pass --check_availability=False to try anyway."
             )
         if availability:
             logging.info(f"  Availability {scope}: {availability}")
 
-    def gpus(self, availability: bool = False) -> None:
-        """List GPU names and IDs from RunPod's catalog.
+    def gpus(self) -> None:
+        """List RunPod's GPU catalog with VRAM, secure-cloud price and live pod stock.
 
-        Args:
-            availability: Also show live pod stock (HIGH/MEDIUM/LOW/NONE), overall and
-                for your network volume's datacenter; GPUs without stock data for that
-                datacenter are not rentable there and are hidden.
+        Stock is HIGH/MEDIUM/LOW/NONE, overall and for your network volume's datacenter;
+        "-" means RunPod reports no stock data for that datacenter, so the GPU cannot be
+        rented there. GPUs rentable in your datacenter are listed last, cheapest first.
         """
-        catalog = sorted(self._api.get_gpu_catalog(), key=lambda gpu: gpu["id"])
-        if not availability:
-            _print_markdown_table(["Name", "ID"], [(gpu["name"], gpu["id"]) for gpu in catalog])
-            return
         rows = []
-        for gpu in catalog:
-            datacenters = {dc.get("id"): dc.get("availability") for dc in gpu.get("dataCenters") or []}
-            region_availability = datacenters.get(self._region)
-            if not region_availability:
+        for gpu in self._api.get_gpu_catalog():
+            if gpu["id"] == "unknown":
                 continue
-            rows.append((gpu["name"], gpu["id"], gpu.get("availability") or "?", region_availability))
-        _print_markdown_table(["Name", "ID", "Overall", self._region], rows)
+            datacenters = {dc.get("id"): dc.get("availability") for dc in gpu.get("dataCenters") or []}
+            region_availability = datacenters.get(self._region) or "-"
+            price = (gpu.get("price") or {}).get("secure") or None  # RunPod reports 0 for delisted cards
+            rentable_here = region_availability not in ("-", "NONE")
+            rows.append((
+                (rentable_here, price if price is not None else float("inf"), gpu["id"]),
+                (gpu["name"], gpu["id"], f"{gpu['memory']} GB" if gpu.get("memory") else "?",
+                 f"{price:.2f}" if price is not None else "?", gpu.get("availability") or "?", region_availability),
+            ))
+        rows.sort(key=lambda row: row[0])
+        _print_markdown_table(["Name", "ID", "VRAM", "$/h", "Overall", self._region], [row[1] for row in rows])
 
     def list(self, verbose: bool = False) -> None:
         """List all pods in your RunPod account.

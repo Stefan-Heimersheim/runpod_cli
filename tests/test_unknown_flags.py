@@ -23,7 +23,7 @@ def test_unknown_flags_are_rejected_before_running(argv):
     ["create", "-h"],
     ["list", "-v"],
     ["terminate", "abc123", "def456"],
-    ["gpus", "--availability"],
+    ["gpus"],
     [],
 ])
 def test_known_flags_pass(argv):

@@ -58,26 +58,27 @@ def test_check_can_be_disabled():
         manager.create(gpu_type="A4000", name="test", check_availability=False)
 
 
-def test_gpus_availability_hides_gpus_without_datacenter_stock(capsys):
-    manager = make_manager([gpu_entry(availability="LOW", dataCenters=[{"id": "EU-RO-1", "availability": "HIGH"}]),
-                            {"id": "NVIDIA L4", "name": "L4", "availability": "LOW",
-                             "dataCenters": [{"id": "EU-RO-1", "availability": "LOW"}]},
-                            {"id": "NVIDIA B200", "name": "B200", "availability": "NONE"}])
-    manager.gpus(availability=True)
-    out = capsys.readouterr().out
-    # B200 has no stock data for the volume's datacenter, so it is not shown
-    assert "B200" not in out
-    # markdown table, columns space-aligned to the longest visible value
-    assert out == ("| Name      | ID               | Overall | EU-RO-1 |\n"
-                   "| --------- | ---------------- | ------- | ------- |\n"
-                   "| L4        | NVIDIA L4        | LOW     | LOW     |\n"
-                   "| RTX A4000 | NVIDIA RTX A4000 | LOW     | HIGH    |\n")
-
-
-def test_gpus_default_output_is_aligned_markdown_table(capsys):
-    manager = make_manager([gpu_entry(availability="LOW"), {"id": "NVIDIA L4", "name": "L4"}])
+def test_gpus_lists_all_gpus_rentable_in_datacenter_last_and_cheapest_first(capsys):
+    manager = make_manager([
+        gpu_entry(availability="LOW", memory=16, price={"secure": 0.32, "community": 0.2},
+                  dataCenters=[{"id": "EU-RO-1", "availability": "HIGH"}]),
+        {"id": "NVIDIA L4", "name": "L4", "availability": "LOW", "memory": 24, "price": {"secure": 0.43},
+         "dataCenters": [{"id": "EU-RO-1", "availability": "LOW"}]},
+        {"id": "NVIDIA H100 80GB HBM3", "name": "H100 SXM", "availability": "MEDIUM", "memory": 80,
+         "price": {"secure": 2.69}, "dataCenters": [{"id": "EU-RO-1", "availability": "NONE"}]},
+        {"id": "NVIDIA B200", "name": "B200", "availability": "NONE", "memory": 180, "price": {"secure": 5.98}},
+        {"id": "NVIDIA A40", "name": "A40", "availability": "LOW", "memory": 48, "price": {"secure": 0}},
+        {"id": "unknown", "name": "unknown"},
+    ])
     manager.gpus()
-    assert capsys.readouterr().out == ("| Name      | ID               |\n"
-                                       "| --------- | ---------------- |\n"
-                                       "| L4        | NVIDIA L4        |\n"
-                                       "| RTX A4000 | NVIDIA RTX A4000 |\n")
+    # H100 (NONE) and B200/A40 (no datacenter data) come first, GPUs rentable in EU-RO-1 last,
+    # each group cheapest first with unknown (zero) prices at the end; the "unknown" placeholder is dropped
+    assert capsys.readouterr().out == (
+        "| Name      | ID                    | VRAM   | $/h  | Overall | EU-RO-1 |\n"
+        "| --------- | --------------------- | ------ | ---- | ------- | ------- |\n"
+        "| H100 SXM  | NVIDIA H100 80GB HBM3 | 80 GB  | 2.69 | MEDIUM  | NONE    |\n"
+        "| B200      | NVIDIA B200           | 180 GB | 5.98 | NONE    | -       |\n"
+        "| A40       | NVIDIA A40            | 48 GB  | ?    | LOW     | -       |\n"
+        "| RTX A4000 | NVIDIA RTX A4000      | 16 GB  | 0.32 | LOW     | HIGH    |\n"
+        "| L4        | NVIDIA L4             | 24 GB  | 0.43 | LOW     | LOW     |\n"
+    )
