@@ -67,12 +67,17 @@ def test_gpus_availability_hides_gpus_without_datacenter_stock(capsys):
     out = capsys.readouterr().out
     # B200 has no stock data for the volume's datacenter, so it is not shown
     assert "B200" not in out
-    # columns are space-aligned to the longest visible value
-    assert out == ("L4         NVIDIA L4         LOW  EU-RO-1:LOW\n"
-                   "RTX A4000  NVIDIA RTX A4000  LOW  EU-RO-1:HIGH\n")
+    # markdown table, columns space-aligned to the longest visible value
+    assert out == ("| Name      | ID               | Overall | EU-RO-1 |\n"
+                   "| --------- | ---------------- | ------- | ------- |\n"
+                   "| L4        | NVIDIA L4        | LOW     | LOW     |\n"
+                   "| RTX A4000 | NVIDIA RTX A4000 | LOW     | HIGH    |\n")
 
 
-def test_gpus_default_output_is_unchanged(capsys):
-    manager = make_manager([gpu_entry(availability="LOW")])
+def test_gpus_default_output_is_aligned_markdown_table(capsys):
+    manager = make_manager([gpu_entry(availability="LOW"), {"id": "NVIDIA L4", "name": "L4"}])
     manager.gpus()
-    assert capsys.readouterr().out == "RTX A4000\tNVIDIA RTX A4000\n"
+    assert capsys.readouterr().out == ("| Name      | ID               |\n"
+                                       "| --------- | ---------------- |\n"
+                                       "| L4        | NVIDIA L4        |\n"
+                                       "| RTX A4000 | NVIDIA RTX A4000 |\n")

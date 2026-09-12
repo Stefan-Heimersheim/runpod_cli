@@ -65,6 +65,14 @@ def env_default(flag_value, env_var: str, fallback):
     return value
 
 
+
+def _print_markdown_table(headers: List[str], rows: List[Tuple[str, ...]]) -> None:
+    """Print a markdown table with every column padded to its widest cell."""
+    widths = [max(len(str(cell)) for cell in column) for column in zip(headers, *rows)]
+    lines = [headers, ["-" * width for width in widths], *rows]
+    for line in lines:
+        print("| " + " | ".join(str(cell).ljust(width) for cell, width in zip(line, widths)) + " |")
+
 class RunPodManager:
     """RunPod Management CLI - A command-line tool for managing RunPod instances via the RunPod API.
 
@@ -218,8 +226,7 @@ class RunPodManager:
         """
         catalog = sorted(self._api.get_gpu_catalog(), key=lambda gpu: gpu["id"])
         if not availability:
-            for gpu in catalog:
-                print(f"{gpu['name']}\t{gpu['id']}")
+            _print_markdown_table(["Name", "ID"], [(gpu["name"], gpu["id"]) for gpu in catalog])
             return
         rows = []
         for gpu in catalog:
@@ -227,10 +234,8 @@ class RunPodManager:
             region_availability = datacenters.get(self._region)
             if not region_availability:
                 continue
-            rows.append((gpu["name"], gpu["id"], gpu.get("availability") or "?", f"{self._region}:{region_availability}"))
-        widths = [max(len(row[column]) for row in rows) for column in range(4)] if rows else []
-        for row in rows:
-            print("  ".join(value.ljust(width) for value, width in zip(row, widths)).rstrip())
+            rows.append((gpu["name"], gpu["id"], gpu.get("availability") or "?", region_availability))
+        _print_markdown_table(["Name", "ID", "Overall", self._region], rows)
 
     def list(self, verbose: bool = False) -> None:
         """List all pods in your RunPod account.
