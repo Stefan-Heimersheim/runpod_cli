@@ -221,20 +221,21 @@ class RunPodManager:
 
         Stock is HIGH/MEDIUM/LOW/NONE, overall and for your network volume's datacenter;
         "-" means RunPod reports no stock data for that datacenter, so the GPU cannot be
-        rented there. GPUs rentable in your datacenter are listed last, cheapest first.
+        rented there. Delisted GPUs (no secure-cloud price) are omitted. GPUs rentable in
+        your datacenter are listed last, cheapest first.
         """
         rows = []
         for gpu in self._api.get_gpu_catalog():
-            if gpu["id"] == "unknown":
+            price = (gpu.get("price") or {}).get("secure")
+            if not price:  # delisted cards (price 0 or missing) and the "unknown" placeholder
                 continue
             datacenters = {dc.get("id"): dc.get("availability") for dc in gpu.get("dataCenters") or []}
             region_availability = datacenters.get(self._region) or "-"
-            price = (gpu.get("price") or {}).get("secure") or None  # RunPod reports 0 for delisted cards
             rentable_here = region_availability not in ("-", "NONE")
             rows.append((
-                (rentable_here, price if price is not None else float("inf"), gpu["id"]),
+                (rentable_here, price, gpu["id"]),
                 (gpu["name"], gpu["id"], f"{gpu['memory']} GB" if gpu.get("memory") else "?",
-                 f"{price:.2f}" if price is not None else "?", gpu.get("availability") or "?", region_availability),
+                 f"{price:.2f}", gpu.get("availability") or "?", region_availability),
             ))
         rows.sort(key=lambda row: row[0])
         _print_markdown_table(["Name", "ID", "VRAM", "$/h", "Overall", self._region], [row[1] for row in rows])

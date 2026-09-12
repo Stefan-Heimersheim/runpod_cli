@@ -71,14 +71,13 @@ def test_gpus_lists_all_gpus_rentable_in_datacenter_last_and_cheapest_first(caps
         {"id": "unknown", "name": "unknown"},
     ])
     manager.gpus()
-    # H100 (NONE) and B200/A40 (no datacenter data) come first, GPUs rentable in EU-RO-1 last,
-    # each group cheapest first with unknown (zero) prices at the end; the "unknown" placeholder is dropped
+    # H100 (NONE) and B200 (no datacenter data) come first, GPUs rentable in EU-RO-1 last, each group
+    # cheapest first; A40 (delisted, price 0) and the "unknown" placeholder are dropped
     assert capsys.readouterr().out == (
         "| Name      | ID                    | VRAM   | $/h  | Overall | EU-RO-1 |\n"
         "| --------- | --------------------- | ------ | ---- | ------- | ------- |\n"
         "| H100 SXM  | NVIDIA H100 80GB HBM3 | 80 GB  | 2.69 | MEDIUM  | NONE    |\n"
         "| B200      | NVIDIA B200           | 180 GB | 5.98 | NONE    | -       |\n"
-        "| A40       | NVIDIA A40            | 48 GB  | ?    | LOW     | -       |\n"
         "| RTX A4000 | NVIDIA RTX A4000      | 16 GB  | 0.32 | LOW     | HIGH    |\n"
         "| L4        | NVIDIA L4             | 24 GB  | 0.43 | LOW     | LOW     |\n"
     )
