@@ -5,7 +5,7 @@ A command-line tool for managing RunPod instances via the RunPod API, based on
 
 This version makes several changes:
 - Talks to **RunPod's REST v2 API** (`api.runpod.io/v2`); GraphQL is used only for
-  account queries (SSH keys, teams) that have no v2 equivalent yet.
+  team listing. Account SSH keys use the REST v2 account endpoint.
 - Embeds base64-encoded startup scripts in the pod creation request (no S3 credentials or manual volume setup).
 - Uses the **official RunPod Docker image** by default (often faster to pull).
 - Installs a curated set of **system Python packages** on startup using `uv --system` on the fast

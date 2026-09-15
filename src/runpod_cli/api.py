@@ -9,7 +9,7 @@ import requests
 
 RUNPOD_REST_URL = "https://api.runpod.io/v2"
 RUNPOD_GPU_CATALOG_URL = f"{RUNPOD_REST_URL}/catalog/gpus"
-# Account fields (pubKey, teams) have no REST v2 equivalent yet
+# Team listing still uses GraphQL
 RUNPOD_GRAPHQL_URL = "https://api.runpod.io/graphql"  # rp-migrate: keep-v1
 
 # Error messages that mean "retry later", not "bad request"
@@ -285,6 +285,5 @@ class RunPodAPI:
         raise RunPodConfigError(f"Network volume {volume_id} not found")
 
     def get_pub_key(self) -> Optional[str]:
-        # account SSH keys have no REST v2 route
-        data = self._graphql("query { myself { pubKey } }")  # rp-migrate: keep-v1
-        return data.get("myself", {}).get("pubKey")  # rp-migrate: keep-v1
+        keys = self._rest("GET", "/account/ssh-keys")["keys"]
+        return "\n".join(keys) or None
