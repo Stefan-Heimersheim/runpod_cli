@@ -13,7 +13,6 @@ def make_manager(catalog):
     manager._api.get_pods.return_value = [{"id": "existing"}]
     manager._api.get_pub_key.return_value = ""
     manager._api.create_pod.side_effect = RuntimeError("stop before provisioning")
-    manager._s3 = Mock()
     manager._network_volume_id = "vol"
     manager._region = "EU-RO-1"
     return manager
@@ -29,7 +28,6 @@ def test_no_stock_in_volume_datacenter_exits_75_before_creating():
         manager.create(gpu_type="A4000", name="test")
     assert error.value.exit_code == 75
     manager._api.create_pod.assert_not_called()
-    manager._s3.put_object.assert_not_called()  # nothing uploaded either
 
 
 def test_datacenter_stock_overrides_global_none():

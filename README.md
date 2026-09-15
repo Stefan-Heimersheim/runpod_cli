@@ -6,12 +6,13 @@ A command-line tool for managing RunPod instances via the RunPod API, based on
 This version makes several changes:
 - Talks to **RunPod's REST v2 API** (`api.runpod.io/v2`); GraphQL is used only for
   account queries (SSH keys, teams) that have no v2 equivalent yet.
-- Uses **RunPod’s S3 API** to provision startup scripts & host keys (no manual volume setup).
+- Embeds base64-encoded startup scripts in the pod creation request (no S3 credentials or manual volume setup).
 - Uses the **official RunPod Docker image** by default (often faster to pull).
 - Installs a curated set of **system Python packages** on startup using `uv --system` on the fast
   container disk, so your venvs can reuse them via `--system-site-packages`.
 - Quality-of-life improvements:
-  - Automatically adds pod **SSH host keys** to your local `known_hosts` (retrieved over HTTPS via S3).
+  - Uses normal SSH host-key verification on first connection; automatic S3-based
+    `known_hosts` updates and the `--update_known_hosts` flag have been removed.
   - **Persistent bash history** and **Claude Code / Codex state** (`CLAUDE_CONFIG_DIR`,
     `CODEX_HOME`) stored on the network volume, so history and logins survive pod termination.
     The files are keyed by your local username, so team members sharing a volume don't mix state.
@@ -25,9 +26,10 @@ This version makes several changes:
   - Defaults the pod name to `<username>-<gpu>`.
   - Allows **GPU display name or ID** (e.g. `"RTX A4000"` or `"NVIDIA RTX A4000"`).
 
-⚠️ These changes rely on [RunPod’s S3 API](https://docs.runpod.io/serverless/storage/s3-api),
-which is currently available only in some regions. Ensure your network volume is in one of:
-`EUR-IS-1`, `EU-RO-1`, `EU-CZ-1`, `US-KS-2`.
+Startup scripts are decoded into a unique `.tmp_*` directory on the mounted network
+volume. Old script directories and logs are retained; remove them from a running
+pod when no longer needed. The startup command is intended for the bundled setup
+scripts, not bulk file transfers.
 
 🔒 **Security note:** Your RunPod keys are stored on the pod at `/root/.runpod_env` and are
 accessible to anyone who can log in to the pod. This includes team members whose SSH keys are
@@ -71,7 +73,7 @@ pip install -r requirements.txt
 ## Configuration
 
 1. Create a RunPod [network-volume](https://docs.runpod.io/pods/storage/create-network-volumes).
-   Choose a region from the S3-supported regions; pick one that has availability for your preferred GPU types.
+   Choose a region that has availability for your preferred GPU types.
 
 2. [Optional but recommended] Add this line to the top of your `~/.ssh/config`:
 ```
@@ -87,8 +89,6 @@ cp .env.example ~/.config/runpod_cli/.env
 4. Fill the following variables in `~/.config/runpod_cli/.env`:
 - `RUNPOD_API_KEY` – your RunPod API key
 - `RUNPOD_NETWORK_VOLUME_ID` – your network volume ID
-- `RUNPOD_S3_ACCESS_KEY_ID` – S3 access key for the volume
-- `RUNPOD_S3_SECRET_KEY` – S3 secret key for the volume
 - (Optional) `GIT_NAME`, `GIT_EMAIL` – global git config on the pod
 - (Optional) `RPC_DEFAULT_*` – default values for `rpc create` (see below)
 

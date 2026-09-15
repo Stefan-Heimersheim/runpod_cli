@@ -38,7 +38,6 @@ def manager():
     manager._api = Mock()
     manager._api.get_pods.return_value = [{"id": "existing"}]
     manager._api.create_pod.side_effect = RuntimeError("stop before provisioning")
-    manager._s3 = Mock()
     manager._network_volume_id = "vol"
     manager._region = "EU"
     return manager

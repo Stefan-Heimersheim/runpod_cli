@@ -1,0 +1,22 @@
+{
+  "gpu": "NVIDIA RTX 2000 Ada Generation",
+  "region": "EU-RO-1",
+  "catalog_hourly_price": 0.24,
+  "scripts_directory": "/network/.tmp_rpc-base64-transfer-test_ea836ecb",
+  "command_bytes": 14330,
+  "pod_id": "p1ubvt5qf37aad",
+  "reported_cost": 0.24,
+  "sha256": {
+    "/network/.tmp_rpc-base64-transfer-test_ea836ecb/setup_root.sh": "ee4daef81badb44b7da6191764022f2fb6d19af24572b3b923d240f80f294330",
+    "/network/.tmp_rpc-base64-transfer-test_ea836ecb/setup_user.sh": "141a947515eb1cdba124c49e1bc209f4c397ecfa229fb576d8c3678be353017f",
+    "/network/.tmp_rpc-base64-transfer-test_ea836ecb/install.sh": "acea637a51542c70419719300b5eb60e9d6b8cb9cf852687511225f12d643379",
+    "/network/.tmp_rpc-base64-transfer-test_ea836ecb/start_pod.sh": "2e2f8b47b643a78a87e5b7191cb6c84c77fe23a22d0593a1f2ede3432bc1d9a8",
+    "/network/.tmp_rpc-base64-transfer-test_ea836ecb/terminate_pod.sh": "183d29eae70421892768e46b825068d5295b5075ea7f3632f355a7f21c73f5c9"
+  },
+  "verified_files": 5,
+  "remote_output": "ee4daef81badb44b7da6191764022f2fb6d19af24572b3b923d240f80f294330  /network/.tmp_rpc-base64-transfer-test_ea836ecb/setup_root.sh\n141a947515eb1cdba124c49e1bc209f4c397ecfa229fb576d8c3678be353017f  /network/.tmp_rpc-base64-transfer-test_ea836ecb/setup_user.sh\nacea637a51542c70419719300b5eb60e9d6b8cb9cf852687511225f12d643379  /network/.tmp_rpc-base64-transfer-test_ea836ecb/install.sh\n2e2f8b47b643a78a87e5b7191cb6c84c77fe23a22d0593a1f2ede3432bc1d9a8  /network/.tmp_rpc-base64-transfer-test_ea836ecb/start_pod.sh\n183d29eae70421892768e46b825068d5295b5075ea7f3632f355a7f21c73f5c9  /network/.tmp_rpc-base64-transfer-test_ea836ecb/terminate_pod.sh\nNVIDIA RTX 2000 Ada Generation\nexport RPC_TRANSFER_TEST='quotes $HOME `literal` \u2603'\n",
+  "passed": true,
+  "terminated": true,
+  "absent_from_pod_list": true,
+  "elapsed_seconds": 19.2
+}

@@ -1,3 +1,4 @@
+from test_script_transfer import embedded_scripts
 import os
 import subprocess
 from unittest.mock import Mock
@@ -55,12 +56,11 @@ def test_cli_embeds_sanitized_local_user(monkeypatch):
     manager._api.get_pub_key.return_value = ""
     manager._api.get_pods.return_value = [{"id": "existing"}]
     manager._api.create_pod.side_effect = RuntimeError("stop before provisioning")
-    manager._s3 = Mock()
     manager._network_volume_id = "vol"
     manager._region = "EU"
     with pytest.raises(RuntimeError, match="stop before provisioning"):
         manager.create(gpu_type="CPU", name="test")
-    uploads = {call.kwargs["Key"]: call.kwargs["Body"] for call in manager._s3.put_object.call_args_list}
+    uploads = embedded_scripts(manager._api.create_pod.call_args.kwargs["docker_args"])
     setup_user = next(body for key, body in uploads.items() if key.endswith("/setup_user.sh"))
     assert b"export HISTFILE=/workspace/.bash_history_alice_smith" in setup_user
 
@@ -71,11 +71,10 @@ def test_cli_embeds_line_in_setup_script():
     manager._api.get_pub_key.return_value = ""
     manager._api.get_pods.return_value = [{"id": "existing"}]
     manager._api.create_pod.side_effect = RuntimeError("stop before provisioning")
-    manager._s3 = Mock()
     manager._network_volume_id = "vol"
     manager._region = "EU"
     with pytest.raises(RuntimeError, match="stop before provisioning"):
         manager.create(gpu_type="CPU", name="test", bashrc_line="export CUSTOM_TEST=1")
-    uploads = {call.kwargs["Key"]: call.kwargs["Body"] for call in manager._s3.put_object.call_args_list}
+    uploads = embedded_scripts(manager._api.create_pod.call_args.kwargs["docker_args"])
     setup_user = next(body for key, body in uploads.items() if key.endswith("/setup_user.sh"))
     assert b"echo 'export CUSTOM_TEST=1' >> ~/.bashrc" in setup_user
