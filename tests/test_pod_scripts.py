@@ -4,7 +4,7 @@ import subprocess
 
 import pytest
 
-from runpod_cli.utils import get_install, get_setup_root, get_setup_user, get_start, get_terminate
+from runpod_cli.utils import get_logging, get_install, get_setup_root, get_setup_user, get_start, get_terminate
 
 
 @pytest.mark.parametrize(
@@ -45,10 +45,9 @@ def test_fast_setup_runs_before_slow_installs():
     assert "|| { apt-get update && apt-get install -y tmux git rsync curl sudo nano; }" in install
 
 
-def test_terminate_logging_redirects_stderr_without_dead_tee():
+def test_terminate_logging_tees_stdout_and_stderr():
     _, script = get_terminate()
-    assert "exec >> /network/runpod_cli_log.txt 2>&1" in script
-    assert "tee" not in script
+    assert "exec > >(tee -a /network/runpod_cli_log.txt) 2>&1" in script
 
 
 def test_terminate_uses_rest_v2_with_key_in_header():
@@ -125,7 +124,18 @@ def test_all_scripts_append_stdout_and_stderr_to_shared_log(tmp_path):
                get_terminate(log_path=str(log))]
     expected = 'existing\n'
     for name, script in scripts:
-        redirect = next(line.strip() for line in script.splitlines() if 'exec >>' in line)
-        subprocess.run(['bash', '-c', redirect + f'\necho {name}\necho stderr >&2'], check=True)
+        result = subprocess.run(['bash', '-c', get_logging(str(log)) + f'\necho {name}\necho stderr >&2'],
+                                check=True, capture_output=True, text=True)
+        assert result.stdout == name + '\nstderr\n'
         expected += name + '\nstderr\n'
     assert log.read_text() == expected
+
+
+def test_nested_scripts_do_not_duplicate_logs(tmp_path):
+    log = tmp_path / 'log.txt'
+    child = tmp_path / 'child.sh'
+    child.write_text(get_logging(str(log)) + '\necho child\n')
+    command = get_logging(str(log)) + f'\necho parent\nbash {child}\n'
+    result = subprocess.run(['bash', '-c', command], capture_output=True, text=True, check=True)
+    assert result.stdout == 'parent\nchild\n'
+    assert log.read_text() == result.stdout

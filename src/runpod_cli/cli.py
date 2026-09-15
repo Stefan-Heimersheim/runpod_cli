@@ -1,4 +1,6 @@
 import base64
+import binascii
+from contextlib import closing
 import glob
 import inspect
 import logging
@@ -294,6 +296,7 @@ class RunPodManager:
         memory: Optional[int] = None,
         num_gpus: Optional[int] = None,
         ssh_keys: Optional[str] = None,
+        update_known_hosts: bool = True,
         update_ssh_config: bool = True,
         volume_mount_path: str = "/network",
         bashrc_line: Optional[str] = None,
@@ -315,6 +318,7 @@ class RunPodManager:
             memory: Minimum RAM in GB per GPU (default: 16, RPC_DEFAULT_MEMORY)
             ssh_keys: Public key file(s), space-separated, wildcards ok (default: RunPod account keys, RPC_DEFAULT_SSH_PUBLIC_KEY_PATH)
             forward_agent: Add ForwardAgent to the SSH config (default: False, RPC_DEFAULT_FORWARD_AGENT)
+            update_known_hosts: Fetch SSH host keys through the pod logs API (default: True)
             update_ssh_config: Write the runpod/runpodN aliases to ~/.ssh/config.runpod_cli (default: True)
             volume_mount_path: Where the network volume is mounted on the pod (default: /network, /workspace links to it)
             image_name: Docker image (default: RunPod PyTorch 2.8.0 / CUDA 12.8.1 / Ubuntu 24.04, RPC_DEFAULT_IMAGE_NAME)
@@ -430,7 +434,47 @@ class RunPodManager:
             number = self._write_ssh_config(ip, port, forward_agent)
             connect = f"ssh runpod (or: ssh runpod{number})"
 
+        if update_known_hosts and public_keys:
+            self._update_known_hosts_file(pod_id, ip, port)
         logging.info(f"Done! Connect with: {connect}")
+
+    def _update_known_hosts_file(self, pod_id: str, public_ip: str, port: int) -> None:
+        logging.info("Waiting for SSH host keys from pod logs...")
+        keys = set()
+        complete = False
+        try:
+            with closing(self._api.get_pod_log_lines(pod_id)) as lines:
+                for line in lines:
+                    if line == "RUNPOD_CLI_HOST_KEYS_END":
+                        complete = True
+                        break
+                    if not line.startswith("RUNPOD_CLI_HOST_KEY "):
+                        continue
+                    fields = line.split()
+                    if len(fields) < 3:
+                        continue
+                    algorithm, key = fields[1:3]
+                    if algorithm not in {"ssh-ed25519", "ssh-rsa", "ssh-dss", "ecdsa-sha2-nistp256",
+                                         "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521"}:
+                        continue
+                    try:
+                        raw = base64.b64decode(key, validate=True)
+                    except (ValueError, binascii.Error):
+                        continue
+                    name = algorithm.encode("ascii")
+                    if raw[:4] != len(name).to_bytes(4, "big") or raw[4:4 + len(name)] != name or len(raw) <= 4 + len(name):
+                        continue
+                    keys.add((algorithm, key))
+        except RunPodAPIError as error:
+            logging.warning("Could not retrieve SSH host keys: %s", error)
+        if not complete or not keys:
+            logging.warning("No complete SSH host-key set received; SSH will verify the host on first connection")
+            return
+        path = os.path.expanduser("~/.ssh/known_hosts.runpod_cli")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "a") as dest:
+            for algorithm, key in sorted(keys):
+                dest.write(f"[{public_ip}]:{port} {algorithm} {key}\n")
 
     def _generate_ssh_config(self, ip: str, port: int, forward_agent: bool = False, host_aliases: str = "runpod") -> str:
         return textwrap.dedent(f"""

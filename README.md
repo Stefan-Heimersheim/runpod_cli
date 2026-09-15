@@ -11,8 +11,8 @@ This version makes several changes:
 - Installs a curated set of **system Python packages** on startup using `uv --system` on the fast
   container disk, so your venvs can reuse them via `--system-site-packages`.
 - Quality-of-life improvements:
-  - Uses normal SSH host-key verification on first connection; automatic S3-based
-    `known_hosts` updates and the `--update_known_hosts` flag have been removed.
+  - Automatically adds pod SSH host keys to `known_hosts.runpod_cli`, retrieved
+    over HTTPS through the REST v2 pod logs API (`--update_known_hosts=False` to skip).
   - **Persistent bash history** and **Claude Code / Codex state** (`CLAUDE_CONFIG_DIR`,
     `CODEX_HOME`) stored on the network volume, so history and logins survive pod termination.
     The files are keyed by your local username, so team members sharing a volume don't mix state.
@@ -27,7 +27,8 @@ This version makes several changes:
   - Allows **GPU display name or ID** (e.g. `"RTX A4000"` or `"NVIDIA RTX A4000"`).
 
 Startup scripts are decoded into `/opt/runpod_cli` on the container filesystem and
-are removed with the pod. All setup and termination scripts append to
+are removed with the pod. All setup and termination scripts send output to the
+container logs (available through the API) and append to
 `/network/runpod_cli_log.txt` (under your chosen mount path if overridden).
 Pods sharing a volume append to the same log file. No new `.tmp_*` directories
 are created on the volume. The startup command is intended for the bundled setup

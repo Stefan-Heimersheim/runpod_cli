@@ -7,13 +7,23 @@ DEFAULT_IMAGE_NAME = "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404"
 
 SCRIPTS_PATH = "/opt/runpod_cli"
 
+def get_logging(log_path: str) -> str:
+    return textwrap.dedent("""\
+        if [[ ${RPC_LOGGING_ACTIVE:-} != 1 ]]; then
+            touch RPC_LOG_FILE
+            exec > >(tee -a RPC_LOG_FILE) 2>&1
+            export RPC_LOGGING_ACTIVE=1
+        fi
+    """).replace("RPC_LOG_FILE", shlex.quote(log_path)).strip()
+
+
 # Shell scripts to load onto the pod
 def get_setup_root(volume_mount_path: str) -> Tuple[str, str]:
     log_path = f"{volume_mount_path}/runpod_cli_log.txt"
     return "setup_root.sh", textwrap.dedent(
         r"""
         #!/bin/bash
-        exec >> RPC_LOG_FILE 2>&1 # logging
+        RPC_LOGGING_SETUP
         echo "=== $(date -Iseconds) setup_root.sh ==="
 
         echo "Setting up system environment..."
@@ -50,7 +60,7 @@ def get_setup_root(volume_mount_path: str) -> Tuple[str, str]:
         ln -s /opt/runpod_cli/terminate_pod.sh /usr/local/bin/terminate_pod
 
         echo "...system setup completed!"
-    """.replace("RPC_LOG_FILE", shlex.quote(log_path)).replace("VOLUME_MOUNT_PATH", volume_mount_path)
+    """.replace("RPC_LOGGING_SETUP", get_logging(log_path)).replace("RPC_LOG_FILE", shlex.quote(log_path)).replace("VOLUME_MOUNT_PATH", volume_mount_path)
     )
 
 
@@ -58,7 +68,7 @@ def get_install(log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str
     return "install.sh", textwrap.dedent(
         r"""
         #!/bin/bash
-        exec >> RPC_LOG_FILE 2>&1 # logging
+        RPC_LOGGING_SETUP
         echo "=== $(date -Iseconds) install.sh ==="
 
         echo "Installing agents, system packages, and tools..."
@@ -104,7 +114,7 @@ def get_install(log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str
         su -c 'uv venv ~/.venv --python $(python --version | cut -d" " -f2 | cut -d. -f1-2) --system-site-packages' ubuntu
 
         echo "...installs completed!"
-    """.replace("RPC_LOG_FILE", shlex.quote(log_path))
+    """.replace("RPC_LOGGING_SETUP", get_logging(log_path)).replace("RPC_LOG_FILE", shlex.quote(log_path))
     )
 
 
@@ -116,7 +126,7 @@ def get_setup_user(
     return "setup_user.sh", textwrap.dedent(
         r"""
         #!/bin/bash
-        exec >> RPC_LOG_FILE 2>&1 # logging
+        RPC_LOGGING_SETUP
         echo "=== $(date -Iseconds) setup_user.sh ==="
 
         echo "Setting up user environment..."
@@ -155,7 +165,7 @@ def get_setup_user(
         echo '    defaultBranch = main' >> ~/.gitconfig
 
         echo "...user setup completed!"
-    """.replace("RPC_LOG_FILE", shlex.quote(log_path))
+    """.replace("RPC_LOGGING_SETUP", get_logging(log_path)).replace("RPC_LOG_FILE", shlex.quote(log_path))
         .replace("GIT_EMAIL", git_email)
         .replace("GIT_NAME", git_name)
         .replace("CUSTOM_BASHRC_SETUP", bashrc_setup)
@@ -169,7 +179,7 @@ def get_start(log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str]:
         #!/bin/bash
         # Adapted from https://github.com/runpod/containers/blob/main/container-template/start_pod.sh
 
-        exec >> RPC_LOG_FILE 2>&1 # logging
+        RPC_LOGGING_SETUP
         echo "=== $(date -Iseconds) start_pod.sh ==="
         set -e  # exit the script if any line fails
 
@@ -184,7 +194,6 @@ def get_start(log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str]:
                     ssh-keygen -t rsa -f /etc/ssh/ssh_host_rsa_key -q -N ''
                     echo "RSA key fingerprint:"
                     ssh-keygen -lf /etc/ssh/ssh_host_rsa_key.pub
-                    cp /etc/ssh/ssh_host_rsa_key.pub /opt/runpod_cli/ssh_rsa_host_key
                 fi
 
                 if [ ! -f /etc/ssh/ssh_host_dsa_key ]; then
@@ -192,7 +201,6 @@ def get_start(log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str]:
                     if ssh-keygen -t dsa -f /etc/ssh/ssh_host_dsa_key -q -N ''; then
                         echo "DSA key fingerprint:"
                         ssh-keygen -lf /etc/ssh/ssh_host_dsa_key.pub
-                        cp /etc/ssh/ssh_host_dsa_key.pub /opt/runpod_cli/ssh_dsa_host_key
                     else
                         echo "DSA host key generation not supported, skipping"
                     fi
@@ -202,23 +210,22 @@ def get_start(log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str]:
                     ssh-keygen -t ecdsa -f /etc/ssh/ssh_host_ecdsa_key -q -N ''
                     echo "ECDSA key fingerprint:"
                     ssh-keygen -lf /etc/ssh/ssh_host_ecdsa_key.pub
-                    cp /etc/ssh/ssh_host_ecdsa_key.pub /opt/runpod_cli/ssh_ecdsa_host_key
                 fi
 
                 if [ ! -f /etc/ssh/ssh_host_ed25519_key ]; then
                     ssh-keygen -t ed25519 -f /etc/ssh/ssh_host_ed25519_key -q -N ''
                     echo "ED25519 key fingerprint:"
                     ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
-                    cp /etc/ssh/ssh_host_ed25519_key.pub /opt/runpod_cli/ssh_ed25519_host_key
                 fi
 
                 service ssh start
 
                 echo "SSH host keys:"
-                for key in /etc/ssh/*.pub; do
-                    echo "Key: $key"
-                    ssh-keygen -lf $key
+                for key in /etc/ssh/ssh_host_*_key.pub; do
+                    [[ -f "$key" ]] || continue
+                    printf 'RUNPOD_CLI_HOST_KEY %s\n' "$(cat "$key")"
                 done
+                echo "RUNPOD_CLI_HOST_KEYS_END"
             fi
         }
 
@@ -236,7 +243,7 @@ def get_start(log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str]:
         bash /opt/runpod_cli/install.sh
 
         echo "Start script(s) finished, pod is ready to use."
-    """.replace("RPC_LOG_FILE", shlex.quote(log_path))
+    """.replace("RPC_LOGGING_SETUP", get_logging(log_path)).replace("RPC_LOG_FILE", shlex.quote(log_path))
     )
 
 
@@ -244,7 +251,7 @@ def get_terminate(log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, s
     return "terminate_pod.sh", textwrap.dedent(
         r"""
         #!/bin/bash
-        exec >> RPC_LOG_FILE 2>&1 # logging
+        RPC_LOGGING_SETUP
         echo "=== $(date -Iseconds) terminate_pod.sh ==="
 
         if [ "$(id -u)" -ne 0 ]; then
@@ -260,5 +267,5 @@ def get_terminate(log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, s
         curl --request DELETE \
         --header "Authorization: Bearer ${RUNPOD_API_KEY}" \
         --url "https://api.runpod.io/v2/pods/${RUNPOD_POD_ID}"
-    """.replace("RPC_LOG_FILE", shlex.quote(log_path))
+    """.replace("RPC_LOGGING_SETUP", get_logging(log_path)).replace("RPC_LOG_FILE", shlex.quote(log_path))
     )
