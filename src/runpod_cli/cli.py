@@ -86,7 +86,6 @@ class RunPodManager:
         gpus        List RunPod's GPU catalog with VRAM, price and live stock
         terminate   Terminate one or more pods by ID
         reset       Delete the SSH config files written by runpod_cli
-        teams       List your RunPod teams (IDs for RUNPOD_TEAM_ID)
         pubkey      Show the SSH public keys stored in your RunPod account
 
     Global options:
@@ -271,17 +270,6 @@ class RunPodManager:
                     logging.info(f"  mountPath: {network_mounts[0].get('path')}")
                 for key in ["disk", "cost", "status"]:
                     logging.info(f"  {key}: {pod.get(key)}")
-            logging.info("")
-
-    def teams(self) -> None:
-        """List teams you belong to, showing team IDs for use with RUNPOD_TEAM_ID."""
-        teams = self._api.get_teams()
-        if not teams:
-            logging.info("You are not a member of any teams.")
-            return
-        for team in teams:
-            logging.info(f"Team: {team.get('name')}")
-            logging.info(f"  ID: {team.get('id')}")
             logging.info("")
 
     def create(

@@ -4,8 +4,8 @@ A command-line tool for managing RunPod instances via the RunPod API, based on
 [Apollo Research's original runpod_cli tool](https://github.com/ApolloResearch/runpod_cli/tree/legacy).
 
 This version makes several changes:
-- Talks to **RunPod's REST v2 API** (`api.runpod.io/v2`); GraphQL is used only for
-  team listing. Account SSH keys use the REST v2 account endpoint.
+- Talks exclusively to **RunPod's REST v2 API** (`api.runpod.io/v2`), including
+  account SSH keys and pod logs.
 - Embeds base64-encoded startup scripts in the pod creation request (no S3 credentials or manual volume setup).
 - Uses the **official RunPod Docker image** by default (often faster to pull).
 - Installs a curated set of **system Python packages** on startup using `uv --system` on the fast
@@ -109,7 +109,6 @@ You can run the CLI either as:
 - `rpc gpus` — List RunPod's GPU catalog with VRAM, price and live stock.
 - `rpc terminate POD_ID [POD_ID ...]` — Terminate one or more pods.
 - `rpc reset` — Delete the SSH config files written by runpod_cli.
-- `rpc teams` — List your RunPod teams (IDs for `RUNPOD_TEAM_ID`).
 - `rpc pubkey` — Show the SSH public keys stored in your RunPod account.
 
 Every command accepts `--help`. Flags must be spelled out in full (`--num_gpus`, not `--num_g`); Fire also

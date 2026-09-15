@@ -1,4 +1,4 @@
-"""RunPod API client: REST v2, with GraphQL only for account queries v2 does not cover."""
+"""RunPod REST v2 API client."""
 
 import json
 import logging
@@ -9,8 +9,6 @@ import requests
 
 RUNPOD_REST_URL = "https://api.runpod.io/v2"
 RUNPOD_GPU_CATALOG_URL = f"{RUNPOD_REST_URL}/catalog/gpus"
-# Team listing still uses GraphQL
-RUNPOD_GRAPHQL_URL = "https://api.runpod.io/graphql"  # rp-migrate: keep-v1
 
 # Error messages that mean "retry later", not "bad request"
 CAPACITY_MARKERS = (
@@ -79,7 +77,7 @@ def select_cpu_instance(min_vcpus: int, min_memory_gb: int) -> str:
 
 
 class RunPodAPI:
-    """RunPod REST v2 client (GraphQL only where v2 has no equivalent)."""
+    """RunPod REST v2 client."""
 
     def __init__(self, api_key: str, team_id: Optional[str] = None) -> None:
         self._api_key = api_key
@@ -110,17 +108,6 @@ class RunPodAPI:
         if any(marker in message.lower() for marker in CAPACITY_MARKERS):
             raise RunPodCapacityError(message)
         raise RunPodAPIError(message)
-
-    def _graphql(self, query: str) -> Dict:
-        # rp-migrate: keep-v1 — used only for account fields with no REST v2 route
-        response = requests.post(RUNPOD_GRAPHQL_URL, headers=self._headers, json={"query": query})
-        if response.status_code != 200:
-            raise RunPodAPIError(f"RunPod API error ({response.status_code}): {response.text}")
-        result = response.json()
-        if result.get("errors"):
-            messages = [error.get("message", "Unknown API error") for error in result["errors"]]
-            raise RunPodAPIError("; ".join(messages))
-        return result.get("data", {})
 
     def get_gpu_catalog(self) -> List[Dict]:
         """Fetch the GPU catalog with live pod availability from REST v2.
@@ -271,11 +258,6 @@ class RunPodAPI:
 
     def terminate_pod(self, pod_id: str) -> None:
         self._rest("DELETE", f"/pods/{pod_id}")  # rp-migrate: ignore — v2 path via _rest helper
-
-    def get_teams(self) -> List[Dict]:
-        # teams are account data with no REST v2 route
-        data = self._graphql("query { myself { teams { id name } } }")  # rp-migrate: keep-v1
-        return data.get("myself", {}).get("teams", [])  # rp-migrate: keep-v1
 
     def get_network_volume(self, volume_id: str) -> Dict:
         volumes = self._rest("GET", "/network-volumes")["networkVolumes"]
