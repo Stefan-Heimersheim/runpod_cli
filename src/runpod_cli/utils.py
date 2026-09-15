@@ -46,11 +46,11 @@ def get_setup_root(volume_mount_path: str) -> Tuple[str, str]:
         mkdir -p /etc/sudoers.d && echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/ubuntu && chmod 440 /etc/sudoers.d/ubuntu
         echo "export HF_HOME=/workspace/hf_home/" >> /home/ubuntu/.bashrc
         echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/ubuntu/.bashrc
-        chmod a+x RUNPODCLI_PATH/terminate_pod.sh
-        ln -s RUNPODCLI_PATH/terminate_pod.sh /usr/local/bin/terminate_pod
+        chmod a+x /opt/runpod_cli/terminate_pod.sh
+        ln -s /opt/runpod_cli/terminate_pod.sh /usr/local/bin/terminate_pod
 
         echo "...system setup completed!"
-    """.replace("RUNPODCLI_PATH", SCRIPTS_PATH).replace("RPC_LOG_FILE", shlex.quote(log_path)).replace("VOLUME_MOUNT_PATH", volume_mount_path)
+    """.replace("RPC_LOG_FILE", shlex.quote(log_path)).replace("VOLUME_MOUNT_PATH", volume_mount_path)
     )
 
 
@@ -184,7 +184,7 @@ def get_start(log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str]:
                     ssh-keygen -t rsa -f /etc/ssh/ssh_host_rsa_key -q -N ''
                     echo "RSA key fingerprint:"
                     ssh-keygen -lf /etc/ssh/ssh_host_rsa_key.pub
-                    cp /etc/ssh/ssh_host_rsa_key.pub RUNPODCLI_PATH/ssh_rsa_host_key
+                    cp /etc/ssh/ssh_host_rsa_key.pub /opt/runpod_cli/ssh_rsa_host_key
                 fi
 
                 if [ ! -f /etc/ssh/ssh_host_dsa_key ]; then
@@ -192,7 +192,7 @@ def get_start(log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str]:
                     if ssh-keygen -t dsa -f /etc/ssh/ssh_host_dsa_key -q -N ''; then
                         echo "DSA key fingerprint:"
                         ssh-keygen -lf /etc/ssh/ssh_host_dsa_key.pub
-                        cp /etc/ssh/ssh_host_dsa_key.pub RUNPODCLI_PATH/ssh_dsa_host_key
+                        cp /etc/ssh/ssh_host_dsa_key.pub /opt/runpod_cli/ssh_dsa_host_key
                     else
                         echo "DSA host key generation not supported, skipping"
                     fi
@@ -202,14 +202,14 @@ def get_start(log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str]:
                     ssh-keygen -t ecdsa -f /etc/ssh/ssh_host_ecdsa_key -q -N ''
                     echo "ECDSA key fingerprint:"
                     ssh-keygen -lf /etc/ssh/ssh_host_ecdsa_key.pub
-                    cp /etc/ssh/ssh_host_ecdsa_key.pub RUNPODCLI_PATH/ssh_ecdsa_host_key
+                    cp /etc/ssh/ssh_host_ecdsa_key.pub /opt/runpod_cli/ssh_ecdsa_host_key
                 fi
 
                 if [ ! -f /etc/ssh/ssh_host_ed25519_key ]; then
                     ssh-keygen -t ed25519 -f /etc/ssh/ssh_host_ed25519_key -q -N ''
                     echo "ED25519 key fingerprint:"
                     ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
-                    cp /etc/ssh/ssh_host_ed25519_key.pub RUNPODCLI_PATH/ssh_ed25519_host_key
+                    cp /etc/ssh/ssh_host_ed25519_key.pub /opt/runpod_cli/ssh_ed25519_host_key
                 fi
 
                 service ssh start
@@ -230,13 +230,13 @@ def get_start(log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str]:
 
         setup_ssh
         export_env_vars
-        bash RUNPODCLI_PATH/setup_root.sh
-        su -c "bash RUNPODCLI_PATH/setup_user.sh" ubuntu
+        bash /opt/runpod_cli/setup_root.sh
+        su -c "bash /opt/runpod_cli/setup_user.sh" ubuntu
         echo "Fast setup finished, pod is ready to log in; installs continue..."
-        bash RUNPODCLI_PATH/install.sh
+        bash /opt/runpod_cli/install.sh
 
         echo "Start script(s) finished, pod is ready to use."
-    """.replace("RUNPODCLI_PATH", SCRIPTS_PATH).replace("RPC_LOG_FILE", shlex.quote(log_path))
+    """.replace("RPC_LOG_FILE", shlex.quote(log_path))
     )
 
 
