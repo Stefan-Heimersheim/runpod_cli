@@ -22,13 +22,15 @@ This version makes several changes:
   - **Two-phase startup**: fast setup (user account, bashrc, git config) finishes within
     seconds of pod start so early SSH logins get a configured shell; slow installs
     (apt upgrade, agent CLIs, Python packages) continue afterwards — watch progress
-    with `tail -f /network/.tmp_*/log.txt` on the pod.
+    with `tail -f /network/runpod_cli_logs.txt` on the pod.
   - Defaults the pod name to `<username>-<gpu>`.
   - Allows **GPU display name or ID** (e.g. `"RTX A4000"` or `"NVIDIA RTX A4000"`).
 
-Startup scripts are decoded into a unique `.tmp_*` directory on the mounted network
-volume. Old script directories and logs are retained; remove them from a running
-pod when no longer needed. The startup command is intended for the bundled setup
+Startup scripts are decoded into `/opt/runpod_cli` on the container filesystem and
+are removed with the pod. All setup and termination scripts append to
+`/network/runpod_cli_logs.txt` (under your chosen mount path if overridden).
+Pods sharing a volume append to the same log file. No new `.tmp_*` directories
+are created on the volume. The startup command is intended for the bundled setup
 scripts, not bulk file transfers.
 
 🔒 **Security note:** Your RunPod keys are stored on the pod at `/root/.runpod_env` and are

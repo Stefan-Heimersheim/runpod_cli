@@ -8,7 +8,6 @@ import shlex
 import sys
 import textwrap
 import time
-import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
@@ -119,11 +118,10 @@ class RunPodManager:
         self._region = volume_info["dataCenter"]
 
     def _build_docker_args(
-        self, volume_mount_path: str, runpodcli_dir: str, runtime: int,
+        self, runpodcli_path: str, runtime: int,
         scripts: List[Tuple[str, str]],
     ) -> str:
         """Deliver startup scripts through the pod API and decode them on the pod."""
-        runpodcli_path = f"{volume_mount_path}/{runpodcli_dir}"
         commands = [f"mkdir -p -- {shlex.quote(runpodcli_path)}"]
         for name, content in scripts:
             encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
@@ -365,23 +363,22 @@ class RunPodManager:
                 self._check_gpu_availability(gpu_entry, gpu_display_name)
 
         name = name or f"{os.getenv('USER')}-{gpu_display_name}"
-        # Unique per pod, so same-named pods never share logs or host keys
-        runpodcli_dir = f".tmp_{re.sub(r'[^A-Za-z0-9._-]', '_', name)}_{uuid.uuid4().hex[:8]}"
 
         git_email = os.getenv("GIT_EMAIL", "")
         git_name = os.getenv("GIT_NAME", "")
         # Sanitized local username, used to keep per-user state apart on team-shared volumes
         local_user = re.sub(r"[^A-Za-z0-9._-]", "_", os.getenv("USER") or "user")
-        remote_scripts_path = f"{volume_mount_path}/{runpodcli_dir}"
+        remote_scripts_path = "/opt/runpod_cli"
+        log_path = f"{volume_mount_path}/runpod_cli_logs.txt"
         scripts = [
             get_setup_root(remote_scripts_path, volume_mount_path),
-            get_setup_user(remote_scripts_path, git_email, git_name, bashrc_line, local_user),
-            get_install(remote_scripts_path),
-            get_start(remote_scripts_path),
-            get_terminate(remote_scripts_path),
+            get_setup_user(remote_scripts_path, git_email, git_name, bashrc_line, local_user, log_path=log_path),
+            get_install(remote_scripts_path, log_path=log_path),
+            get_start(remote_scripts_path, log_path=log_path),
+            get_terminate(remote_scripts_path, log_path=log_path),
         ]
         docker_args = self._build_docker_args(
-            volume_mount_path=volume_mount_path, runpodcli_dir=runpodcli_dir,
+            runpodcli_path=remote_scripts_path,
             runtime=runtime, scripts=scripts,
         )
 

@@ -18,17 +18,17 @@ def embedded_scripts(args):
 
 def test_all_current_scripts_arrive_byte_for_byte(tmp_path):
     manager = RunPodManager.__new__(RunPodManager)
-    path = str(tmp_path / '.tmp_test')
+    path = str(tmp_path / 'scripts')
     scripts = [get_setup_root(path, str(tmp_path)),
                get_setup_user(path, 'test@example.com', 'Test', 'export TEST="quotes: \' $ ` ☃"', 'alice'),
                get_install(path), get_start(path), get_terminate(path)]
-    args = manager._build_docker_args(str(tmp_path), '.tmp_test', 1, scripts)
+    args = manager._build_docker_args(path, 1, scripts)
     # Execute the actual transfer commands without provisioning this local machine.
     bootstrap = shlex.split(args)[2].split('; bash ')[0]
     subprocess.run(['bash', '-c', bootstrap], check=True)
     for name, content in scripts:
-        assert (tmp_path / '.tmp_test' / name).read_bytes() == content.encode('utf-8')
-        subprocess.run(['bash', '-n', str(tmp_path / '.tmp_test' / name)], check=True)
+        assert (tmp_path / 'scripts' / name).read_bytes() == content.encode('utf-8')
+        subprocess.run(['bash', '-n', str(tmp_path / 'scripts' / name)], check=True)
 
 
 def test_quoted_paths_and_runtime_sequence(tmp_path):
@@ -37,7 +37,7 @@ def test_quoted_paths_and_runtime_sequence(tmp_path):
     scripts = [('start_pod.sh', 'printf start >> "$EVENTS"\nexit 1\n'),
                ('terminate_pod.sh', 'printf terminate >> "$EVENTS"\n'),
                ('empty.txt', '')]
-    args = manager._build_docker_args(str(tmp_path), directory, 0, scripts)
+    args = manager._build_docker_args(str(tmp_path / directory), 0, scripts)
     command = shlex.split(args)[2].replace('sleep 20', 'sleep 0')
     events = tmp_path / 'events'
     subprocess.run(['bash', '-c', command], env=dict(os.environ, EVENTS=str(events)), check=True)
@@ -53,7 +53,7 @@ def test_write_failure_continues_to_setup_and_termination(tmp_path):
     scripts = [('blocked', 'cannot overwrite a directory'),
                ('start_pod.sh', 'printf start >> "$EVENTS"\nexit 1\n'),
                ('terminate_pod.sh', 'printf terminate >> "$EVENTS"\n')]
-    args = manager._build_docker_args(str(tmp_path), 'scripts', 0, scripts)
+    args = manager._build_docker_args(str(directory), 0, scripts)
     command = shlex.split(args)[2].replace('sleep 20', 'sleep 0')
     events = tmp_path / 'events'
     result = subprocess.run(['bash', '-c', command],

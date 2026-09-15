@@ -18,18 +18,20 @@ def make_manager(pods):
     return manager
 
 
-def test_same_named_pods_get_distinct_script_dirs(monkeypatch):
+@pytest.mark.parametrize('mount', ['/network', '/custom-volume'])
+def test_scripts_use_container_disk_and_logs_use_volume(monkeypatch, mount):
     monkeypatch.setattr(RunPodManager, 'reset', lambda self: None)
-    dirs = set()
-    for _ in range(2):
-        manager = make_manager(pods=[{'id': 'existing'}])
-        with pytest.raises(RuntimeError, match='stop before provisioning'):
-            manager.create(gpu_type='CPU', name='stefan-B200')
-        paths = embedded_scripts(manager._api.create_pod.call_args.kwargs['docker_args'])
-        (directory,) = {PurePosixPath(path).parent.name for path in paths}
-        assert directory.startswith('.tmp_stefan-B200_')
-        dirs.add(directory)
-    assert len(dirs) == 2
+    manager = make_manager(pods=[])
+    with pytest.raises(RuntimeError, match='stop before provisioning'):
+        manager.create(gpu_type='CPU', name='test', volume_mount_path=mount)
+    scripts = embedded_scripts(manager._api.create_pod.call_args.kwargs['docker_args'])
+    assert len(scripts) == 5
+    assert {str(PurePosixPath(path).parent) for path in scripts} == {'/opt/runpod_cli'}
+    for content in scripts.values():
+        assert f'exec >> {mount}/runpod_cli_logs.txt 2>&1'.encode() in content
+        assert b'.tmp_' not in content
+    assert f'chown ubuntu:ubuntu {mount}/runpod_cli_logs.txt'.encode() in scripts['/opt/runpod_cli/setup_root.sh']
+    assert b'ln -s /opt/runpod_cli/terminate_pod.sh /usr/local/bin/terminate_pod' in scripts['/opt/runpod_cli/setup_root.sh']
 
 
 @pytest.mark.parametrize('pods', [[], [{'id': 'existing'}]])

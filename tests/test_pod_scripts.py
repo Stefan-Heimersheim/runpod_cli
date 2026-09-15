@@ -47,7 +47,7 @@ def test_fast_setup_runs_before_slow_installs():
 
 def test_terminate_logging_redirects_stderr_without_dead_tee():
     _, script = get_terminate("/network/test")
-    assert "exec >> /network/test/log.txt 2>&1" in script
+    assert "exec >> /network/runpod_cli_logs.txt 2>&1" in script
     assert "tee" not in script
 
 
@@ -111,3 +111,22 @@ def test_install_breaks_system_packages_for_pep668_images():
     # Ubuntu 24.04 marks /usr as externally managed; without this flag uv
     # refuses and no Python package lands on the pod
     assert "uv pip install --system --break-system-packages" in install
+
+
+def test_all_scripts_append_stdout_and_stderr_to_shared_log(tmp_path):
+    volume = tmp_path / 'volume with spaces'
+    volume.mkdir()
+    log = volume / 'runpod_cli_logs.txt'
+    log.write_text('existing\n')
+    path = '/opt/runpod_cli'
+    scripts = [get_setup_root(path, str(volume)),
+               get_setup_user(path, '', '', log_path=str(log)),
+               get_install(path, log_path=str(log)),
+               get_start(path, log_path=str(log)),
+               get_terminate(path, log_path=str(log))]
+    expected = 'existing\n'
+    for name, script in scripts:
+        redirect = next(line.strip() for line in script.splitlines() if 'exec >>' in line)
+        subprocess.run(['bash', '-c', redirect + f'\necho {name}\necho stderr >&2'], check=True)
+        expected += name + '\nstderr\n'
+    assert log.read_text() == expected
