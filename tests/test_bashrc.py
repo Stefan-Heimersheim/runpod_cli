@@ -11,7 +11,7 @@ from runpod_cli.utils import get_setup_user
 
 def test_bashrc_line_is_appended(tmp_path):
     line = 'export CUSTOM_TEST="$HOME/config"'
-    _, script = get_setup_user("/network/test", "test@example.com", "Test", line)
+    _, script = get_setup_user("test@example.com", "Test", line)
     subprocess.run(["bash", "-n"], input=script, text=True, check=True)
     setup = script.split("# Git configuration")[0]
     env = dict(os.environ, HOME=str(tmp_path))
@@ -25,7 +25,7 @@ def test_bashrc_line_is_appended(tmp_path):
 
 
 def test_no_bashrc_line_keeps_default_setup(tmp_path):
-    _, script = get_setup_user("/network/test", "test@example.com", "Test")
+    _, script = get_setup_user("test@example.com", "Test")
     assert "CUSTOM_BASHRC_SETUP" not in script
     setup = script.split("# Git configuration")[0]
     env = dict(os.environ, HOME=str(tmp_path))
@@ -43,7 +43,7 @@ def test_no_bashrc_line_keeps_default_setup(tmp_path):
 
 
 def test_state_files_are_keyed_by_local_user():
-    _, script = get_setup_user("/network/test", "test@example.com", "Test", local_user="stefan")
+    _, script = get_setup_user("test@example.com", "Test", local_user="stefan")
     assert "export HISTFILE=/workspace/.bash_history_stefan" in script
     assert "export CLAUDE_CONFIG_DIR=/workspace/.claude_stefan" in script
     assert "export CODEX_HOME=/workspace/.codex_stefan" in script

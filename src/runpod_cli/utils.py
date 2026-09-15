@@ -5,8 +5,10 @@ from typing import Optional, Tuple
 # Default Docker image for pods
 DEFAULT_IMAGE_NAME = "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404"
 
+SCRIPTS_PATH = "/opt/runpod_cli"
+
 # Shell scripts to load onto the pod
-def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, str]:
+def get_setup_root(volume_mount_path: str) -> Tuple[str, str]:
     log_path = f"{volume_mount_path}/runpod_cli_log.txt"
     return "setup_root.sh", textwrap.dedent(
         r"""
@@ -48,11 +50,11 @@ def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, st
         ln -s RUNPODCLI_PATH/terminate_pod.sh /usr/local/bin/terminate_pod
 
         echo "...system setup completed!"
-    """.replace("RUNPODCLI_PATH", runpodcli_path).replace("RPC_LOG_FILE", shlex.quote(log_path)).replace("VOLUME_MOUNT_PATH", volume_mount_path)
+    """.replace("RUNPODCLI_PATH", SCRIPTS_PATH).replace("RPC_LOG_FILE", shlex.quote(log_path)).replace("VOLUME_MOUNT_PATH", volume_mount_path)
     )
 
 
-def get_install(runpodcli_path: str, log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str]:
+def get_install(log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str]:
     return "install.sh", textwrap.dedent(
         r"""
         #!/bin/bash
@@ -102,12 +104,12 @@ def get_install(runpodcli_path: str, log_path: str = "/network/runpod_cli_log.tx
         su -c 'uv venv ~/.venv --python $(python --version | cut -d" " -f2 | cut -d. -f1-2) --system-site-packages' ubuntu
 
         echo "...installs completed!"
-    """.replace("RUNPODCLI_PATH", runpodcli_path).replace("RPC_LOG_FILE", shlex.quote(log_path))
+    """.replace("RPC_LOG_FILE", shlex.quote(log_path))
     )
 
 
 def get_setup_user(
-    runpodcli_path: str, git_email: str, git_name: str, bashrc_line: Optional[str] = None, local_user: str = "user",
+    git_email: str, git_name: str, bashrc_line: Optional[str] = None, local_user: str = "user",
     log_path: str = "/network/runpod_cli_log.txt",
 ) -> Tuple[str, str]:
     bashrc_setup = f"echo {shlex.quote(str(bashrc_line))} >> ~/.bashrc" if bashrc_line else ""
@@ -153,7 +155,7 @@ def get_setup_user(
         echo '    defaultBranch = main' >> ~/.gitconfig
 
         echo "...user setup completed!"
-    """.replace("RUNPODCLI_PATH", runpodcli_path).replace("RPC_LOG_FILE", shlex.quote(log_path))
+    """.replace("RPC_LOG_FILE", shlex.quote(log_path))
         .replace("GIT_EMAIL", git_email)
         .replace("GIT_NAME", git_name)
         .replace("CUSTOM_BASHRC_SETUP", bashrc_setup)
@@ -161,7 +163,7 @@ def get_setup_user(
     )
 
 
-def get_start(runpodcli_path: str, log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str]:
+def get_start(log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str]:
     return "start_pod.sh", textwrap.dedent(
         r"""
         #!/bin/bash
@@ -234,11 +236,11 @@ def get_start(runpodcli_path: str, log_path: str = "/network/runpod_cli_log.txt"
         bash RUNPODCLI_PATH/install.sh
 
         echo "Start script(s) finished, pod is ready to use."
-    """.replace("RUNPODCLI_PATH", runpodcli_path).replace("RPC_LOG_FILE", shlex.quote(log_path))
+    """.replace("RUNPODCLI_PATH", SCRIPTS_PATH).replace("RPC_LOG_FILE", shlex.quote(log_path))
     )
 
 
-def get_terminate(runpodcli_path: str, log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str]:
+def get_terminate(log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str]:
     return "terminate_pod.sh", textwrap.dedent(
         r"""
         #!/bin/bash
@@ -258,5 +260,5 @@ def get_terminate(runpodcli_path: str, log_path: str = "/network/runpod_cli_log.
         curl --request DELETE \
         --header "Authorization: Bearer ${RUNPOD_API_KEY}" \
         --url "https://api.runpod.io/v2/pods/${RUNPOD_POD_ID}"
-    """.replace("RUNPODCLI_PATH", runpodcli_path).replace("RPC_LOG_FILE", shlex.quote(log_path))
+    """.replace("RPC_LOG_FILE", shlex.quote(log_path))
     )

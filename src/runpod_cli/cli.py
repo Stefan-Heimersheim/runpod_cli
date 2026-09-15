@@ -18,6 +18,7 @@ try:
     from .api import RunPodAPIError, RunPodCapacityError, RunPodConfigError, RunPodAPI
     from .utils import (
         DEFAULT_IMAGE_NAME,
+        SCRIPTS_PATH,
         get_install,
         get_setup_root,
         get_setup_user,
@@ -28,6 +29,7 @@ except ImportError:
     from api import RunPodAPIError, RunPodCapacityError, RunPodConfigError, RunPodAPI  # type: ignore
     from utils import (  # type: ignore
         DEFAULT_IMAGE_NAME,
+        SCRIPTS_PATH,
         get_install,
         get_setup_root,
         get_setup_user,
@@ -118,20 +120,20 @@ class RunPodManager:
         self._region = volume_info["dataCenter"]
 
     def _build_docker_args(
-        self, runpodcli_path: str, runtime: int,
+        self, runtime: int,
         scripts: List[Tuple[str, str]],
     ) -> str:
         """Deliver startup scripts through the pod API and decode them on the pod."""
-        commands = [f"mkdir -p -- {shlex.quote(runpodcli_path)}"]
+        commands = [f"mkdir -p -- {shlex.quote(SCRIPTS_PATH)}"]
         for name, content in scripts:
             encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
             commands.append(
-                f"printf %s {shlex.quote(encoded)} | base64 -d > {shlex.quote(f'{runpodcli_path}/{name}')}"
+                f"printf %s {shlex.quote(encoded)} | base64 -d > {shlex.quote(f'{SCRIPTS_PATH}/{name}')}"
             )
         commands.extend([
-            f"bash {shlex.quote(runpodcli_path + '/start_pod.sh')}",
+            f"bash {shlex.quote(SCRIPTS_PATH + '/start_pod.sh')}",
             f"sleep {max(runtime * 60, 20)}",
-            f"bash {shlex.quote(runpodcli_path + '/terminate_pod.sh')}",
+            f"bash {shlex.quote(SCRIPTS_PATH + '/terminate_pod.sh')}",
         ])
         return "/bin/bash -c " + shlex.quote("; ".join(commands))
 
@@ -368,17 +370,15 @@ class RunPodManager:
         git_name = os.getenv("GIT_NAME", "")
         # Sanitized local username, used to keep per-user state apart on team-shared volumes
         local_user = re.sub(r"[^A-Za-z0-9._-]", "_", os.getenv("USER") or "user")
-        remote_scripts_path = "/opt/runpod_cli"
         log_path = f"{volume_mount_path}/runpod_cli_log.txt"
         scripts = [
-            get_setup_root(remote_scripts_path, volume_mount_path),
-            get_setup_user(remote_scripts_path, git_email, git_name, bashrc_line, local_user, log_path=log_path),
-            get_install(remote_scripts_path, log_path=log_path),
-            get_start(remote_scripts_path, log_path=log_path),
-            get_terminate(remote_scripts_path, log_path=log_path),
+            get_setup_root(volume_mount_path),
+            get_setup_user(git_email, git_name, bashrc_line, local_user, log_path=log_path),
+            get_install(log_path=log_path),
+            get_start(log_path=log_path),
+            get_terminate(log_path=log_path),
         ]
         docker_args = self._build_docker_args(
-            runpodcli_path=remote_scripts_path,
             runtime=runtime, scripts=scripts,
         )
 

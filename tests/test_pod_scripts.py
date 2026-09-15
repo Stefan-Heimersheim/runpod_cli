@@ -10,11 +10,11 @@ from runpod_cli.utils import get_install, get_setup_root, get_setup_user, get_st
 @pytest.mark.parametrize(
     "name,script",
     [
-        get_setup_root("/network/test", "/network"),
-        get_setup_user("/network/test", "test@example.com", "Test"),
-        get_install("/network/test"),
-        get_start("/network/test"),
-        get_terminate("/network/test"),
+        get_setup_root("/network"),
+        get_setup_user("test@example.com", "Test"),
+        get_install(),
+        get_start(),
+        get_terminate(),
     ],
 )
 def test_scripts_pass_bash_syntax_check(name, script):
@@ -22,14 +22,14 @@ def test_scripts_pass_bash_syntax_check(name, script):
 
 
 def test_fast_setup_runs_before_slow_installs():
-    _, start = get_start("/network/test")
+    _, start = get_start()
     order = [start.index(step) for step in
              ["setup_root.sh", "setup_user.sh", "ready to log in", "install.sh"]]
     assert order == sorted(order)
     # The slow work lives in the install scripts, not the setup scripts
-    _, setup_root = get_setup_root("/network/test", "/network")
-    _, setup_user = get_setup_user("/network/test", "test@example.com", "Test")
-    _, install = get_install("/network/test")
+    _, setup_root = get_setup_root("/network")
+    _, setup_user = get_setup_user("test@example.com", "Test")
+    _, install = get_install()
     # the fast phase runs no apt (and no git) at all, so it finishes in seconds
     assert "apt-get" not in setup_root and "apt-get" not in setup_user
     assert "git config" not in setup_user  # .gitconfig is written directly
@@ -46,20 +46,20 @@ def test_fast_setup_runs_before_slow_installs():
 
 
 def test_terminate_logging_redirects_stderr_without_dead_tee():
-    _, script = get_terminate("/network/test")
+    _, script = get_terminate()
     assert "exec >> /network/runpod_cli_log.txt 2>&1" in script
     assert "tee" not in script
 
 
 def test_terminate_uses_rest_v2_with_key_in_header():
-    _, script = get_terminate("/network/test")
+    _, script = get_terminate()
     assert 'https://api.runpod.io/v2/pods/${RUNPOD_POD_ID}' in script
     assert "graphql" not in script
     assert "api_key=" not in script  # the key travels in the Authorization header, not the URL
 
 
 def git_config_section(git_email, git_name):
-    _, script = get_setup_user("/network/test", git_email, git_name)
+    _, script = get_setup_user(git_email, git_name)
     return script.split("# Git configuration")[1]
 
 
@@ -80,14 +80,14 @@ def test_git_identity_is_configured_when_provided(tmp_path):
 
 
 def test_dsa_keygen_failure_does_not_abort_start_script():
-    _, script = get_start("/network/test")
+    _, script = get_start()
     # start_pod.sh runs under set -e; a plain ssh-keygen -t dsa call would
     # abort pod setup on OpenSSH >= 9.8, which removed DSA support
     assert "if ssh-keygen -t dsa" in script
 
 
 def test_setup_root_uses_the_ubuntu_account_and_replaces_nonempty_workspace():
-    _, script = get_setup_root("/network/test", "/network")
+    _, script = get_setup_root("/network")
     # Ubuntu 24.04 images ship an "ubuntu" account at UID 1000, which made the
     # old `useradd --uid 1000 user` fail and left the pod without a login user;
     # the pod user is now "ubuntu", created only on images that lack it
@@ -101,13 +101,13 @@ def test_setup_root_uses_the_ubuntu_account_and_replaces_nonempty_workspace():
 
 
 def test_every_pod_script_runs_user_steps_as_ubuntu():
-    for name, script in [get_install("/network/test"), get_start("/network/test"), get_terminate("/network/test")]:
+    for name, script in [get_install(), get_start(), get_terminate()]:
         assert "/home/user" not in script, name
         assert not re.search(r"\bsu -c .* user$", script, re.M), name
 
 
 def test_install_breaks_system_packages_for_pep668_images():
-    _, install = get_install("/network/test")
+    _, install = get_install()
     # Ubuntu 24.04 marks /usr as externally managed; without this flag uv
     # refuses and no Python package lands on the pod
     assert "uv pip install --system --break-system-packages" in install
@@ -118,12 +118,11 @@ def test_all_scripts_append_stdout_and_stderr_to_shared_log(tmp_path):
     volume.mkdir()
     log = volume / 'runpod_cli_log.txt'
     log.write_text('existing\n')
-    path = '/opt/runpod_cli'
-    scripts = [get_setup_root(path, str(volume)),
-               get_setup_user(path, '', '', log_path=str(log)),
-               get_install(path, log_path=str(log)),
-               get_start(path, log_path=str(log)),
-               get_terminate(path, log_path=str(log))]
+    scripts = [get_setup_root(str(volume)),
+               get_setup_user('', '', log_path=str(log)),
+               get_install(log_path=str(log)),
+               get_start(log_path=str(log)),
+               get_terminate(log_path=str(log))]
     expected = 'existing\n'
     for name, script in scripts:
         redirect = next(line.strip() for line in script.splitlines() if 'exec >>' in line)

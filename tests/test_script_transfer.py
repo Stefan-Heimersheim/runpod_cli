@@ -16,13 +16,14 @@ def embedded_scripts(args):
             for i, token in enumerate(tokens) if token == 'printf'}
 
 
-def test_all_current_scripts_arrive_byte_for_byte(tmp_path):
+def test_all_current_scripts_arrive_byte_for_byte(tmp_path, monkeypatch):
     manager = RunPodManager.__new__(RunPodManager)
     path = str(tmp_path / 'scripts')
-    scripts = [get_setup_root(path, str(tmp_path)),
-               get_setup_user(path, 'test@example.com', 'Test', 'export TEST="quotes: \' $ ` ☃"', 'alice'),
-               get_install(path), get_start(path), get_terminate(path)]
-    args = manager._build_docker_args(path, 1, scripts)
+    scripts = [get_setup_root(str(tmp_path)),
+               get_setup_user('test@example.com', 'Test', 'export TEST="quotes: \' $ ` ☃"', 'alice'),
+               get_install(), get_start(), get_terminate()]
+    monkeypatch.setattr("runpod_cli.cli.SCRIPTS_PATH", path)
+    args = manager._build_docker_args(1, scripts)
     # Execute the actual transfer commands without provisioning this local machine.
     bootstrap = shlex.split(args)[2].split('; bash ')[0]
     subprocess.run(['bash', '-c', bootstrap], check=True)
@@ -31,13 +32,14 @@ def test_all_current_scripts_arrive_byte_for_byte(tmp_path):
         subprocess.run(['bash', '-n', str(tmp_path / 'scripts' / name)], check=True)
 
 
-def test_quoted_paths_and_runtime_sequence(tmp_path):
+def test_quoted_paths_and_runtime_sequence(tmp_path, monkeypatch):
     manager = RunPodManager.__new__(RunPodManager)
     directory = "space ' $dollar"
     scripts = [('start_pod.sh', 'printf start >> "$EVENTS"\nexit 1\n'),
                ('terminate_pod.sh', 'printf terminate >> "$EVENTS"\n'),
                ('empty.txt', '')]
-    args = manager._build_docker_args(str(tmp_path / directory), 0, scripts)
+    monkeypatch.setattr("runpod_cli.cli.SCRIPTS_PATH", str(tmp_path / directory))
+    args = manager._build_docker_args(0, scripts)
     command = shlex.split(args)[2].replace('sleep 20', 'sleep 0')
     events = tmp_path / 'events'
     subprocess.run(['bash', '-c', command], env=dict(os.environ, EVENTS=str(events)), check=True)
@@ -45,7 +47,7 @@ def test_quoted_paths_and_runtime_sequence(tmp_path):
     assert (tmp_path / directory / 'empty.txt').read_bytes() == b''
 
 
-def test_write_failure_continues_to_setup_and_termination(tmp_path):
+def test_write_failure_continues_to_setup_and_termination(tmp_path, monkeypatch):
     manager = RunPodManager.__new__(RunPodManager)
     directory = tmp_path / 'scripts'
     directory.mkdir()
@@ -53,7 +55,8 @@ def test_write_failure_continues_to_setup_and_termination(tmp_path):
     scripts = [('blocked', 'cannot overwrite a directory'),
                ('start_pod.sh', 'printf start >> "$EVENTS"\nexit 1\n'),
                ('terminate_pod.sh', 'printf terminate >> "$EVENTS"\n')]
-    args = manager._build_docker_args(str(directory), 0, scripts)
+    monkeypatch.setattr("runpod_cli.cli.SCRIPTS_PATH", str(directory))
+    args = manager._build_docker_args(0, scripts)
     command = shlex.split(args)[2].replace('sleep 20', 'sleep 0')
     events = tmp_path / 'events'
     result = subprocess.run(['bash', '-c', command],
