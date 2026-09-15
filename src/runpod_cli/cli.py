@@ -130,7 +130,6 @@ class RunPodManager:
             commands.append(
                 f"printf %s {shlex.quote(encoded)} | base64 -d > {shlex.quote(f'{runpodcli_path}/{name}')}"
             )
-        # Keep the runtime/termination sequence even if setup fails.
         commands.extend([
             f"bash {shlex.quote(runpodcli_path + '/start_pod.sh')} || true",
             f"sleep {max(runtime * 60, 20)}",
