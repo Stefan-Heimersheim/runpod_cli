@@ -5,8 +5,6 @@ from typing import Optional, Tuple
 # Default Docker image for pods
 DEFAULT_IMAGE_NAME = "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404"
 
-SCRIPTS_PATH = "/opt/runpod_cli"
-
 def get_logging(log_path: str) -> str:
     return textwrap.dedent("""\
         if [[ ${RPC_LOGGING_ACTIVE:-} != 1 ]]; then

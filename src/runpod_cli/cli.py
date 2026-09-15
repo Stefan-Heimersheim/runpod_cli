@@ -20,7 +20,6 @@ try:
     from .api import RunPodAPIError, RunPodCapacityError, RunPodConfigError, RunPodAPI
     from .utils import (
         DEFAULT_IMAGE_NAME,
-        SCRIPTS_PATH,
         get_install,
         get_setup_root,
         get_setup_user,
@@ -31,7 +30,6 @@ except ImportError:
     from api import RunPodAPIError, RunPodCapacityError, RunPodConfigError, RunPodAPI  # type: ignore
     from utils import (  # type: ignore
         DEFAULT_IMAGE_NAME,
-        SCRIPTS_PATH,
         get_install,
         get_setup_root,
         get_setup_user,
@@ -125,16 +123,16 @@ class RunPodManager:
         scripts: List[Tuple[str, str]],
     ) -> str:
         """Deliver startup scripts through the pod API and decode them on the pod."""
-        commands = [f"mkdir -p -- {shlex.quote(SCRIPTS_PATH)}"]
+        commands = ["mkdir -p /opt/runpod_cli"]
         for name, content in scripts:
             encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
             commands.append(
-                f"printf %s {shlex.quote(encoded)} | base64 -d > {shlex.quote(f'{SCRIPTS_PATH}/{name}')}"
+                f"printf %s {encoded} | base64 -d > /opt/runpod_cli/{name}"
             )
         commands.extend([
-            f"bash {shlex.quote(SCRIPTS_PATH + '/start_pod.sh')}",
+            "bash /opt/runpod_cli/start_pod.sh",
             f"sleep {max(runtime * 60, 20)}",
-            f"bash {shlex.quote(SCRIPTS_PATH + '/terminate_pod.sh')}",
+            "bash /opt/runpod_cli/terminate_pod.sh",
         ])
         return "/bin/bash -c " + shlex.quote("; ".join(commands))
 
