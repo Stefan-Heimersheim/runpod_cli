@@ -45,15 +45,21 @@ def test_quoted_paths_and_runtime_sequence(tmp_path):
     assert (tmp_path / directory / 'empty.txt').read_bytes() == b''
 
 
-def test_write_failure_prevents_startup(tmp_path):
+def test_write_failure_continues_to_setup_and_termination(tmp_path):
     manager = RunPodManager.__new__(RunPodManager)
-    (tmp_path / 'blocked').write_text('not a directory')
-    marker = tmp_path / 'started'
-    args = manager._build_docker_args(str(tmp_path), 'blocked', 0,
-                                     [('start_pod.sh', f'touch {marker}')])
-    result = subprocess.run(shlex.split(args), capture_output=True)
-    assert result.returncode != 0
-    assert not marker.exists()
+    directory = tmp_path / 'scripts'
+    directory.mkdir()
+    (directory / 'blocked').mkdir()
+    scripts = [('blocked', 'cannot overwrite a directory'),
+               ('start_pod.sh', 'printf start >> "$EVENTS"\nexit 1\n'),
+               ('terminate_pod.sh', 'printf terminate >> "$EVENTS"\n')]
+    args = manager._build_docker_args(str(tmp_path), 'scripts', 0, scripts)
+    command = shlex.split(args)[2].replace('sleep 20', 'sleep 0')
+    events = tmp_path / 'events'
+    result = subprocess.run(['bash', '-c', command],
+                            env=dict(os.environ, EVENTS=str(events)), capture_output=True)
+    assert result.returncode == 0
+    assert events.read_text() == 'startterminate'
 
 
 def test_init_needs_no_s3_credentials(tmp_path, monkeypatch):

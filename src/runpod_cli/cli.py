@@ -124,14 +124,14 @@ class RunPodManager:
     ) -> str:
         """Deliver startup scripts through the pod API and decode them on the pod."""
         runpodcli_path = f"{volume_mount_path}/{runpodcli_dir}"
-        commands = ["set -e -o pipefail", f"mkdir -p -- {shlex.quote(runpodcli_path)}"]
+        commands = [f"mkdir -p -- {shlex.quote(runpodcli_path)}"]
         for name, content in scripts:
             encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
             commands.append(
                 f"printf %s {shlex.quote(encoded)} | base64 -d > {shlex.quote(f'{runpodcli_path}/{name}')}"
             )
         commands.extend([
-            f"bash {shlex.quote(runpodcli_path + '/start_pod.sh')} || true",
+            f"bash {shlex.quote(runpodcli_path + '/start_pod.sh')}",
             f"sleep {max(runtime * 60, 20)}",
             f"bash {shlex.quote(runpodcli_path + '/terminate_pod.sh')}",
         ])
