@@ -7,7 +7,7 @@ DEFAULT_IMAGE_NAME = "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404"
 
 # Shell scripts to load onto the pod
 def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, str]:
-    log_path = f"{volume_mount_path}/runpod_cli_logs.txt"
+    log_path = f"{volume_mount_path}/runpod_cli_log.txt"
     return "setup_root.sh", textwrap.dedent(
         r"""
         #!/bin/bash
@@ -52,7 +52,7 @@ def get_setup_root(runpodcli_path: str, volume_mount_path: str) -> Tuple[str, st
     )
 
 
-def get_install(runpodcli_path: str, log_path: str = "/network/runpod_cli_logs.txt") -> Tuple[str, str]:
+def get_install(runpodcli_path: str, log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str]:
     return "install.sh", textwrap.dedent(
         r"""
         #!/bin/bash
@@ -108,7 +108,7 @@ def get_install(runpodcli_path: str, log_path: str = "/network/runpod_cli_logs.t
 
 def get_setup_user(
     runpodcli_path: str, git_email: str, git_name: str, bashrc_line: Optional[str] = None, local_user: str = "user",
-    log_path: str = "/network/runpod_cli_logs.txt",
+    log_path: str = "/network/runpod_cli_log.txt",
 ) -> Tuple[str, str]:
     bashrc_setup = f"echo {shlex.quote(str(bashrc_line))} >> ~/.bashrc" if bashrc_line else ""
     return "setup_user.sh", textwrap.dedent(
@@ -161,7 +161,7 @@ def get_setup_user(
     )
 
 
-def get_start(runpodcli_path: str, log_path: str = "/network/runpod_cli_logs.txt") -> Tuple[str, str]:
+def get_start(runpodcli_path: str, log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str]:
     return "start_pod.sh", textwrap.dedent(
         r"""
         #!/bin/bash
@@ -238,7 +238,7 @@ def get_start(runpodcli_path: str, log_path: str = "/network/runpod_cli_logs.txt
     )
 
 
-def get_terminate(runpodcli_path: str, log_path: str = "/network/runpod_cli_logs.txt") -> Tuple[str, str]:
+def get_terminate(runpodcli_path: str, log_path: str = "/network/runpod_cli_log.txt") -> Tuple[str, str]:
     return "terminate_pod.sh", textwrap.dedent(
         r"""
         #!/bin/bash

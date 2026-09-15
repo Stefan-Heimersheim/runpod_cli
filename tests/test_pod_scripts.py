@@ -47,7 +47,7 @@ def test_fast_setup_runs_before_slow_installs():
 
 def test_terminate_logging_redirects_stderr_without_dead_tee():
     _, script = get_terminate("/network/test")
-    assert "exec >> /network/runpod_cli_logs.txt 2>&1" in script
+    assert "exec >> /network/runpod_cli_log.txt 2>&1" in script
     assert "tee" not in script
 
 
@@ -116,7 +116,7 @@ def test_install_breaks_system_packages_for_pep668_images():
 def test_all_scripts_append_stdout_and_stderr_to_shared_log(tmp_path):
     volume = tmp_path / 'volume with spaces'
     volume.mkdir()
-    log = volume / 'runpod_cli_logs.txt'
+    log = volume / 'runpod_cli_log.txt'
     log.write_text('existing\n')
     path = '/opt/runpod_cli'
     scripts = [get_setup_root(path, str(volume)),

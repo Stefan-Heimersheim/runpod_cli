@@ -369,7 +369,7 @@ class RunPodManager:
         # Sanitized local username, used to keep per-user state apart on team-shared volumes
         local_user = re.sub(r"[^A-Za-z0-9._-]", "_", os.getenv("USER") or "user")
         remote_scripts_path = "/opt/runpod_cli"
-        log_path = f"{volume_mount_path}/runpod_cli_logs.txt"
+        log_path = f"{volume_mount_path}/runpod_cli_log.txt"
         scripts = [
             get_setup_root(remote_scripts_path, volume_mount_path),
             get_setup_user(remote_scripts_path, git_email, git_name, bashrc_line, local_user, log_path=log_path),

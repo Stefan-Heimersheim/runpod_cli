@@ -28,9 +28,9 @@ def test_scripts_use_container_disk_and_logs_use_volume(monkeypatch, mount):
     assert len(scripts) == 5
     assert {str(PurePosixPath(path).parent) for path in scripts} == {'/opt/runpod_cli'}
     for content in scripts.values():
-        assert f'exec >> {mount}/runpod_cli_logs.txt 2>&1'.encode() in content
+        assert f'exec >> {mount}/runpod_cli_log.txt 2>&1'.encode() in content
         assert b'.tmp_' not in content
-    assert f'chown ubuntu:ubuntu {mount}/runpod_cli_logs.txt'.encode() in scripts['/opt/runpod_cli/setup_root.sh']
+    assert f'chown ubuntu:ubuntu {mount}/runpod_cli_log.txt'.encode() in scripts['/opt/runpod_cli/setup_root.sh']
     assert b'ln -s /opt/runpod_cli/terminate_pod.sh /usr/local/bin/terminate_pod' in scripts['/opt/runpod_cli/setup_root.sh']
 
 
