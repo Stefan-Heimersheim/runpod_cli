@@ -22,8 +22,8 @@ def test_host_keys_from_logs_written_and_stream_closed(tmp_path, monkeypatch):
     def stream():
         try:
             yield 'ordinary log output'
-            yield 'RUNPOD_CLI_HOST_KEY ssh-ed25519 invalid!'
-            yield 'RUNPOD_CLI_HOST_KEY ssh-rsa ' + key  # embedded type disagrees
+            yield 'RUNPOD_CLI_HOST_KEY ssh-ed25519'  # too short
+            yield 'RUNPOD_CLI_HOST_KEY sk-ssh-unknown ' + key  # not a known_hosts algorithm
             yield 'RUNPOD_CLI_HOST_KEY ssh-ed25519 ' + key + ' root@pod'
             yield 'RUNPOD_CLI_HOST_KEY ssh-ed25519 ' + key
             yield 'RUNPOD_CLI_HOST_KEYS_END'
@@ -55,17 +55,16 @@ def response(lines):
     return result
 
 
-def test_log_stream_parses_sse_and_resumes():
+def test_log_stream_parses_sse_and_reconnects():
     event = json.dumps({'source': 'container', 'line': 'hello'})
     first = response([': heartbeat', 'id: cursor-1', 'data: ' + event, ''])
-    second = response(['data: invalid', '', 'data: {"source": "system", "line": "ignore"}', '',
-                       'data: {"source": "container",', 'data: "line": "done"}', ''])
+    second = response(['data: invalid', '', 'data: {"source": "container", "line": "done"}', ''])
     with patch('runpod_cli.api.requests.get', side_effect=[first, second]) as get, patch('runpod_cli.api.time.sleep'):
         lines = RunPodAPI('token', team_id='team').get_pod_log_lines('pod')
         assert next(lines) == 'hello'
         assert next(lines) == 'done'
         lines.close()
-    assert get.call_args.kwargs['headers']['Last-Event-ID'] == 'cursor-1'
+    assert get.call_count == 2
     assert get.call_args.kwargs['headers']['Authorization'] == 'Bearer token'
     assert get.call_args.kwargs['headers']['x-team-id'] == 'team'
     assert get.call_args.kwargs['params'] == {'source': 'container', 'tail': 5000}

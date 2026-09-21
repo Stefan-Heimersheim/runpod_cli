@@ -1,5 +1,4 @@
 import base64
-import binascii
 from contextlib import closing
 import glob
 import inspect
@@ -426,6 +425,8 @@ class RunPodManager:
 
     def _update_known_hosts_file(self, pod_id: str, public_ip: str, port: int) -> None:
         logging.info("Waiting for SSH host keys from pod logs...")
+        algorithms = {"ssh-ed25519", "ssh-rsa", "ssh-dss", "ecdsa-sha2-nistp256",
+                      "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521"}
         keys = set()
         complete = False
         try:
@@ -434,23 +435,9 @@ class RunPodManager:
                     if line == "RUNPOD_CLI_HOST_KEYS_END":
                         complete = True
                         break
-                    if not line.startswith("RUNPOD_CLI_HOST_KEY "):
-                        continue
                     fields = line.split()
-                    if len(fields) < 3:
-                        continue
-                    algorithm, key = fields[1:3]
-                    if algorithm not in {"ssh-ed25519", "ssh-rsa", "ssh-dss", "ecdsa-sha2-nistp256",
-                                         "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521"}:
-                        continue
-                    try:
-                        raw = base64.b64decode(key, validate=True)
-                    except (ValueError, binascii.Error):
-                        continue
-                    name = algorithm.encode("ascii")
-                    if raw[:4] != len(name).to_bytes(4, "big") or raw[4:4 + len(name)] != name or len(raw) <= 4 + len(name):
-                        continue
-                    keys.add((algorithm, key))
+                    if len(fields) >= 3 and fields[0] == "RUNPOD_CLI_HOST_KEY" and fields[1] in algorithms:
+                        keys.add((fields[1], fields[2]))
         except RunPodAPIError as error:
             logging.warning("Could not retrieve SSH host keys: %s", error)
         if not complete or not keys:

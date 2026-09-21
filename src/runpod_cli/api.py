@@ -148,16 +148,13 @@ class RunPodAPI:
         return self._rest("GET", f"/pods/{pod_id}")
 
     def get_pod_log_lines(self, pod_id: str, timeout: float = 120.0) -> Iterator[str]:
-        """Read container log lines through authenticated SSE, with bounded retries."""
+        """Yield container log lines from the SSE logs endpoint until the timeout.
+
+        Reconnects after a quiet stream; recent lines may repeat after a reconnect.
+        """
         deadline = time.monotonic() + timeout
-        last_event_id = None
-        while time.monotonic() < deadline:
-            headers = dict(self._headers, Accept="text/event-stream")
-            if last_event_id:
-                headers["Last-Event-ID"] = last_event_id
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                break
+        headers = dict(self._headers, Accept="text/event-stream")
+        while (remaining := deadline - time.monotonic()) > 0:
             try:
                 with requests.get(
                     f"{RUNPOD_REST_URL}/pods/{pod_id}/logs", headers=headers,
@@ -167,32 +164,20 @@ class RunPodAPI:
                     if not response.ok:
                         raise RunPodAPIError(f"Pod logs request failed (HTTP {response.status_code})")
                     response.encoding = "utf-8"
-                    data = []
-                    event_id = None
                     for line in response.iter_lines(chunk_size=1, decode_unicode=True):
                         if time.monotonic() >= deadline:
                             return
-                        if line == "":
-                            if data:
-                                try:
-                                    event = json.loads("\n".join(data))
-                                except ValueError:
-                                    event = None
-                                if isinstance(event, dict) and event.get("source") == "container" and isinstance(event.get("line"), str):
-                                    yield event["line"]
-                            if event_id:
-                                last_event_id = event_id
-                            data, event_id = [], None
-                        elif line.startswith("data:"):
-                            data.append(line[5:].lstrip(" "))
-                        elif line.startswith("id:"):
-                            event_id = line[3:].lstrip(" ")
+                        if not line.startswith("data:"):
+                            continue
+                        try:
+                            event = json.loads(line[5:])
+                        except ValueError:
+                            continue
+                        if isinstance(event, dict) and isinstance(event.get("line"), str):
+                            yield event["line"]
             except requests.RequestException:
-                # A quiet stream can hit the read timeout; reconnect with its cursor.
-                pass
-            remaining = deadline - time.monotonic()
-            if remaining > 0:
-                time.sleep(min(1, remaining))
+                pass  # read timeout on a quiet stream; reopen and re-read the tail
+            time.sleep(min(1, max(0.0, deadline - time.monotonic())))
 
     def create_pod(
         self,
