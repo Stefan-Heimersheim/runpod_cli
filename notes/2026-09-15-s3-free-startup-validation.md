@@ -23,17 +23,9 @@ or the scheduled self-termination timer.
 
 ## Repeat the live test
 
-This command rents one GPU, capped at a catalog price of $0.30/hour by default.
-It uses the configured network volume and a local SSH key, creates temporary SSH
-known-hosts state, and terminates the created pod in a `finally` block.
-
-```bash
-python scripts/test_live_transfer.py --ssh-key ~/.ssh/id_ed25519
-```
-
-Options: `--env`, `--ssh-key`, `--max-hourly-price`, and `--report`.
-No S3 credentials are required. The normal CLI uses interactive SSH host-key
-verification; the smoke test uses SSH's accept-new policy in a temporary file.
+The throwaway script used for this run has been deleted. What it did, and how to
+reproduce it safely, is recorded in the
+[live pod smoke test recipe](2026-09-18-live-pod-smoke-test-recipe.md).
 
 ## Local coverage
 
