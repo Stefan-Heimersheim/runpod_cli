@@ -7,3 +7,5 @@ Not user documentation; that lives in `README.md`. One file per topic, `YYYY-MM-
   scripts via base64 in the startup command instead of S3
 - [Live pod smoke test recipe](2026-09-18-live-pod-smoke-test-recipe.md) — how to create, verify
   and clean up a cheap real pod safely
+- [Tests in a worktree import main's code](2026-09-21-tests-in-worktrees-import-main.md) — the
+  editable venv install shadows worktree source; set `PYTHONPATH=src`
