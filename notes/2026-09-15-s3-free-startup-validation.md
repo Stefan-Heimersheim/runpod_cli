@@ -18,7 +18,6 @@ The implementation adapts the base64 approach from `119996a` on
 - The test removed its unique script directory and terminated its pod. A subsequent
   pod-list request confirmed the pod was absent.
 
-Raw results: [s3-free-transfer-result.json](s3-free-transfer-result.json).
 The test checks transfer and fast setup; it does not wait for all package installs
 or the scheduled self-termination timer.
 
