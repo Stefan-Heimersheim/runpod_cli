@@ -1,3 +1,4 @@
+from test_script_transfer import embedded_scripts
 import os
 import subprocess
 from unittest.mock import Mock
@@ -10,7 +11,7 @@ from runpod_cli.utils import get_setup_user
 
 def test_bashrc_line_is_appended(tmp_path):
     line = 'export CUSTOM_TEST="$HOME/config"'
-    _, script = get_setup_user("/network/test", "test@example.com", "Test", line)
+    _, script = get_setup_user("test@example.com", "Test", line)
     subprocess.run(["bash", "-n"], input=script, text=True, check=True)
     setup = script.split("# Git configuration")[0]
     env = dict(os.environ, HOME=str(tmp_path))
@@ -24,7 +25,7 @@ def test_bashrc_line_is_appended(tmp_path):
 
 
 def test_no_bashrc_line_keeps_default_setup(tmp_path):
-    _, script = get_setup_user("/network/test", "test@example.com", "Test")
+    _, script = get_setup_user("test@example.com", "Test")
     assert "CUSTOM_BASHRC_SETUP" not in script
     setup = script.split("# Git configuration")[0]
     env = dict(os.environ, HOME=str(tmp_path))
@@ -42,7 +43,7 @@ def test_no_bashrc_line_keeps_default_setup(tmp_path):
 
 
 def test_state_files_are_keyed_by_local_user():
-    _, script = get_setup_user("/network/test", "test@example.com", "Test", local_user="stefan")
+    _, script = get_setup_user("test@example.com", "Test", local_user="stefan")
     assert "export HISTFILE=/workspace/.bash_history_stefan" in script
     assert "export CLAUDE_CONFIG_DIR=/workspace/.claude_stefan" in script
     assert "export CODEX_HOME=/workspace/.codex_stefan" in script
@@ -55,12 +56,11 @@ def test_cli_embeds_sanitized_local_user(monkeypatch):
     manager._api.get_pub_key.return_value = ""
     manager._api.get_pods.return_value = [{"id": "existing"}]
     manager._api.create_pod.side_effect = RuntimeError("stop before provisioning")
-    manager._s3 = Mock()
     manager._network_volume_id = "vol"
     manager._region = "EU"
     with pytest.raises(RuntimeError, match="stop before provisioning"):
         manager.create(gpu_type="CPU", name="test")
-    uploads = {call.kwargs["Key"]: call.kwargs["Body"] for call in manager._s3.put_object.call_args_list}
+    uploads = embedded_scripts(manager._api.create_pod.call_args.kwargs["docker_args"])
     setup_user = next(body for key, body in uploads.items() if key.endswith("/setup_user.sh"))
     assert b"export HISTFILE=/workspace/.bash_history_alice_smith" in setup_user
 
@@ -71,11 +71,10 @@ def test_cli_embeds_line_in_setup_script():
     manager._api.get_pub_key.return_value = ""
     manager._api.get_pods.return_value = [{"id": "existing"}]
     manager._api.create_pod.side_effect = RuntimeError("stop before provisioning")
-    manager._s3 = Mock()
     manager._network_volume_id = "vol"
     manager._region = "EU"
     with pytest.raises(RuntimeError, match="stop before provisioning"):
         manager.create(gpu_type="CPU", name="test", bashrc_line="export CUSTOM_TEST=1")
-    uploads = {call.kwargs["Key"]: call.kwargs["Body"] for call in manager._s3.put_object.call_args_list}
+    uploads = embedded_scripts(manager._api.create_pod.call_args.kwargs["docker_args"])
     setup_user = next(body for key, body in uploads.items() if key.endswith("/setup_user.sh"))
     assert b"echo 'export CUSTOM_TEST=1' >> ~/.bashrc" in setup_user
