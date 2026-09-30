@@ -214,10 +214,10 @@ into the environment.
 
 ## Retrying when no pods are available
 
-Before creating a GPU pod, `rpc create` checks live stock in RunPod's catalog
-(preferring your network volume's datacenter, falling back to overall
-availability) and exits with code **75** without creating anything when it is
-`NONE`. Disable this preflight with `--check_availability=False` (or
+Before creating a GPU pod, `rpc create` checks live stock for the GPU in your
+network volume's datacenter and exits with code **75** without creating anything
+when it is `NONE` or the GPU is not offered there (`-` in `rpc gpus`). Overall
+stock is ignored: it can be `HIGH` while the datacenter has none. Disable this preflight with `--check_availability=False` (or
 `RPC_DEFAULT_CHECK_AVAILABILITY=false` in your `.env`). Check stock yourself
 with:
 

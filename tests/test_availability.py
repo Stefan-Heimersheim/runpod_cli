@@ -38,14 +38,17 @@ def test_datacenter_stock_overrides_global_none():
     manager._api.create_pod.assert_called_once()
 
 
-def test_global_none_without_datacenter_data_blocks():
-    manager = make_manager([gpu_entry(availability="NONE")])
-    with pytest.raises(RunPodCapacityError, match="no availability overall"):
+def test_global_stock_without_datacenter_entry_blocks():
+    # Live catalogs report e.g. overall HIGH for a GPU that is not offered in the datacenter
+    # at all; creating it there fails, so overall stock is never used as a fallback
+    manager = make_manager([gpu_entry(availability="HIGH", dataCenters=[{"id": "US-TX-3", "availability": "HIGH"}])])
+    with pytest.raises(RunPodCapacityError, match="no availability in EU-RO-1"):
         manager.create(gpu_type="A4000", name="test")
+    manager._api.create_pod.assert_not_called()
 
 
-def test_missing_availability_data_does_not_block():
-    manager = make_manager([gpu_entry()])
+def test_missing_datacenter_availability_data_does_not_block():
+    manager = make_manager([gpu_entry(availability="NONE", dataCenters=[{"id": "EU-RO-1"}])])
     with pytest.raises(RuntimeError, match="stop before provisioning"):
         manager.create(gpu_type="A4000", name="test")
 

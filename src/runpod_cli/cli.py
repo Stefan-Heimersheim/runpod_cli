@@ -199,22 +199,20 @@ class RunPodManager:
             raise RunPodConfigError(f"Ambiguous GPU type: {gpu_type} matches {matches}. Use a full name or ID from rpc gpus.")
         raise RunPodConfigError(f"Unknown GPU type: {gpu_type}. Use rpc gpus to list GPU names and IDs.")
 
-    def _region_availability(self, gpu_entry: Dict) -> Tuple[Optional[str], str]:
-        """Best available stock signal: the volume's datacenter if reported, else overall."""
-        for dc in gpu_entry.get("dataCenters") or []:
-            if dc.get("id") == self._region:
-                return dc.get("availability"), f"in {self._region}"
-        return gpu_entry.get("availability"), "overall"
-
     def _check_gpu_availability(self, gpu_entry: Dict, gpu_display_name: str) -> None:
-        availability, scope = self._region_availability(gpu_entry)
+        # Only the volume's datacenter matters: overall stock can be HIGH while the pod
+        # cannot be created here. No entry for the datacenter means the GPU is not
+        # rentable there (rpc gpus shows "-"), so it counts as NONE.
+        datacenters = {dc.get("id"): dc for dc in gpu_entry.get("dataCenters") or []}
+        availability = datacenters[self._region].get("availability") if self._region in datacenters else "NONE"
         if availability == "NONE":
             raise RunPodCapacityError(
-                f"{gpu_display_name} has no availability {scope} right now (catalog preflight; nothing was created). "
-                "Retry later, choose another GPU (rpc gpus), or pass --check_availability=False to try anyway."
+                f"{gpu_display_name} has no availability in {self._region} right now (catalog preflight; "
+                "nothing was created). Retry later, choose another GPU (rpc gpus), or pass "
+                "--check_availability=False to try anyway."
             )
         if availability:
-            logging.info(f"  Availability {scope}: {availability}")
+            logging.info(f"  Availability in {self._region}: {availability}")
 
     def gpus(self) -> None:
         """List RunPod's GPU catalog with VRAM, secure-cloud price and live pod stock.
