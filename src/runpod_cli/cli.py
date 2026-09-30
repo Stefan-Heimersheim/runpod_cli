@@ -200,9 +200,6 @@ class RunPodManager:
         raise RunPodConfigError(f"Unknown GPU type: {gpu_type}. Use rpc gpus to list GPU names and IDs.")
 
     def _check_gpu_availability(self, gpu_entry: Dict, gpu_display_name: str) -> None:
-        # Only the volume's datacenter matters: overall stock can be HIGH while the pod
-        # cannot be created here. No entry for the datacenter means the GPU is not
-        # rentable there (rpc gpus shows "-"), so it counts as NONE.
         datacenters = {dc.get("id"): dc for dc in gpu_entry.get("dataCenters") or []}
         availability = datacenters[self._region].get("availability") if self._region in datacenters else "NONE"
         if availability == "NONE":
