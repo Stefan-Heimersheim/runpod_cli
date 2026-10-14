@@ -1,15 +1,14 @@
-"""RunPod API client: REST v2, with GraphQL only for account queries v2 does not cover."""
+"""RunPod REST v2 API client."""
 
+import json
 import logging
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import requests
 
 RUNPOD_REST_URL = "https://api.runpod.io/v2"
 RUNPOD_GPU_CATALOG_URL = f"{RUNPOD_REST_URL}/catalog/gpus"
-# Account fields (pubKey, teams) have no REST v2 equivalent yet
-RUNPOD_GRAPHQL_URL = "https://api.runpod.io/graphql"  # rp-migrate: keep-v1
 
 # Error messages that mean "retry later", not "bad request"
 CAPACITY_MARKERS = (
@@ -78,7 +77,7 @@ def select_cpu_instance(min_vcpus: int, min_memory_gb: int) -> str:
 
 
 class RunPodAPI:
-    """RunPod REST v2 client (GraphQL only where v2 has no equivalent)."""
+    """RunPod REST v2 client."""
 
     def __init__(self, api_key: str, team_id: Optional[str] = None) -> None:
         self._api_key = api_key
@@ -109,17 +108,6 @@ class RunPodAPI:
         if any(marker in message.lower() for marker in CAPACITY_MARKERS):
             raise RunPodCapacityError(message)
         raise RunPodAPIError(message)
-
-    def _graphql(self, query: str) -> Dict:
-        # rp-migrate: keep-v1 — used only for account fields with no REST v2 route
-        response = requests.post(RUNPOD_GRAPHQL_URL, headers=self._headers, json={"query": query})
-        if response.status_code != 200:
-            raise RunPodAPIError(f"RunPod API error ({response.status_code}): {response.text}")
-        result = response.json()
-        if result.get("errors"):
-            messages = [error.get("message", "Unknown API error") for error in result["errors"]]
-            raise RunPodAPIError("; ".join(messages))
-        return result.get("data", {})
 
     def get_gpu_catalog(self) -> List[Dict]:
         """Fetch the GPU catalog with live pod availability from REST v2.
@@ -158,6 +146,38 @@ class RunPodAPI:
 
     def get_pod(self, pod_id: str) -> Dict:
         return self._rest("GET", f"/pods/{pod_id}")
+
+    def get_pod_log_lines(self, pod_id: str, timeout: float = 120.0) -> Iterator[str]:
+        """Yield container log lines from the SSE logs endpoint until the timeout.
+
+        Reconnects after a quiet stream; recent lines may repeat after a reconnect.
+        """
+        deadline = time.monotonic() + timeout
+        headers = dict(self._headers, Accept="text/event-stream")
+        while (remaining := deadline - time.monotonic()) > 0:
+            try:
+                with requests.get(
+                    f"{RUNPOD_REST_URL}/pods/{pod_id}/logs", headers=headers,
+                    params={"source": "container", "tail": 5000}, stream=True,
+                    timeout=(min(10, remaining), min(5, remaining)),
+                ) as response:
+                    if not response.ok:
+                        raise RunPodAPIError(f"Pod logs request failed (HTTP {response.status_code})")
+                    response.encoding = "utf-8"
+                    for line in response.iter_lines(chunk_size=1, decode_unicode=True):
+                        if time.monotonic() >= deadline:
+                            return
+                        if not line.startswith("data:"):
+                            continue
+                        try:
+                            event = json.loads(line[5:])
+                        except ValueError:
+                            continue
+                        if isinstance(event, dict) and isinstance(event.get("line"), str):
+                            yield event["line"]
+            except requests.RequestException:
+                pass  # read timeout on a quiet stream; reopen and re-read the tail
+            time.sleep(min(1, max(0.0, deadline - time.monotonic())))
 
     def create_pod(
         self,
@@ -224,11 +244,6 @@ class RunPodAPI:
     def terminate_pod(self, pod_id: str) -> None:
         self._rest("DELETE", f"/pods/{pod_id}")  # rp-migrate: ignore — v2 path via _rest helper
 
-    def get_teams(self) -> List[Dict]:
-        # teams are account data with no REST v2 route
-        data = self._graphql("query { myself { teams { id name } } }")  # rp-migrate: keep-v1
-        return data.get("myself", {}).get("teams", [])  # rp-migrate: keep-v1
-
     def get_network_volume(self, volume_id: str) -> Dict:
         volumes = self._rest("GET", "/network-volumes")["networkVolumes"]
         for vol in volumes:
@@ -237,6 +252,5 @@ class RunPodAPI:
         raise RunPodConfigError(f"Network volume {volume_id} not found")
 
     def get_pub_key(self) -> Optional[str]:
-        # account SSH keys have no REST v2 route
-        data = self._graphql("query { myself { pubKey } }")  # rp-migrate: keep-v1
-        return data.get("myself", {}).get("pubKey")  # rp-migrate: keep-v1
+        keys = self._rest("GET", "/account/ssh-keys")["keys"]
+        return "\n".join(keys) or None

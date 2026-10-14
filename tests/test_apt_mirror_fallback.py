@@ -1,7 +1,7 @@
 from runpod_cli.utils import get_install, get_setup_user
 
 def test_install_configures_apt_mirror_fallback_before_first_apt_call():
-    _, install = get_install("/network/test")
+    _, install = get_install()
     # a stalled archive.ubuntu.com must not block the install for minutes:
     # short timeout, one retry, and a mirror list apt falls back through
     assert install.index("/etc/apt/mirrors.txt") < install.index("apt-get install")

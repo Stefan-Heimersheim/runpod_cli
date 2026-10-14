@@ -105,11 +105,16 @@ def test_get_pods_unwraps_v2_envelope():
         assert RunPodAPI("test").get_pods() == [{"id": "pod"}]  # rp-migrate: ignore — v2 envelope unwrap
 
 
-def test_pub_key_still_uses_graphql():
-    # rp-migrate: keep-v1 start — account SSH keys have no REST v2 route
-    response = Mock(status_code=200)
-    response.json.return_value = {"data": {"myself": {"pubKey": "ssh-ed25519 AAAA"}}}
-    with patch("runpod_cli.api.requests.post", return_value=response) as post:
-        assert RunPodAPI("test").get_pub_key() == "ssh-ed25519 AAAA"
-    assert post.call_args.args[0] == "https://api.runpod.io/graphql"
-    # rp-migrate: keep-v1 end
+@pytest.mark.parametrize("keys,expected", [
+    ([], None),
+    (["ssh-ed25519 AAAA"], "ssh-ed25519 AAAA"),
+    (["ssh-ed25519 AAAA", "ssh-rsa BBBB"], "ssh-ed25519 AAAA\nssh-rsa BBBB"),
+])
+def test_pub_key_uses_rest_account_keys(keys, expected):
+    with patch("runpod_cli.api.requests.request", return_value=rest_response(200, {"keys": keys})) as request:
+        assert RunPodAPI("test", team_id="team").get_pub_key() == expected
+    request.assert_called_once_with(
+        "GET", "https://api.runpod.io/v2/account/ssh-keys",
+        headers={"Authorization": "Bearer test", "Content-Type": "application/json", "x-team-id": "team"},
+        json=None, timeout=60,
+    )

@@ -14,7 +14,6 @@ requires-python = ">=3.8"
 dependencies = [
     "fire",
     "python-dotenv",
-    "boto3",
     "requests",
 ]
 
